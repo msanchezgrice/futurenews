@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-export const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'Arts', 'Lifestyle', 'Opinion'];
+export const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'AI', 'Arts', 'Lifestyle', 'Opinion'];
 export const ANGLES = ['impact', 'markets', 'policy', 'tech', 'society'];
 
 export function clampYears(value) {

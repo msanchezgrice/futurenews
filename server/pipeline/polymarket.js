@@ -5,9 +5,17 @@ function parseNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function safeParse(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try { const parsed = JSON.parse(val); if (Array.isArray(parsed)) return parsed; } catch {}
+  }
+  return null;
+}
+
 function yesProbability(market) {
-  const outcomes = Array.isArray(market?.outcomes) ? market.outcomes : null;
-  const prices = Array.isArray(market?.outcomePrices) ? market.outcomePrices : null;
+  const outcomes = safeParse(market?.outcomes);
+  const prices = safeParse(market?.outcomePrices);
   if (!outcomes || !prices || outcomes.length !== prices.length) return null;
   const yesIdx = outcomes.findIndex((o) => String(o || '').toLowerCase() === 'yes');
   if (yesIdx < 0) return null;

@@ -113,28 +113,68 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     })
     .join('\n\n');
 
+  // Detect AI section candidates with standing topic enrichments
+  const aiCandidates = (candidates || []).filter((c) => c.section === 'AI' && c.evidencePack?.standingTopic);
+  let aiExtrapolationBlock = '';
+  if (aiCandidates.length) {
+    const aiLines = aiCandidates.map((c) => {
+      const st = c.evidencePack.standingTopic;
+      const axes = Array.isArray(st.extrapolationAxes) ? st.extrapolationAxes : [];
+      const milestones = Array.isArray(st.milestones) ? st.milestones : [];
+      const axesStr = axes.map((a) => `  - ${a.axis}: ${a.description}`).join('\n');
+      const msStr = milestones.map((m) => `  - ${m.year}: ${m.event}`).join('\n');
+      return [
+        `### ${st.label} (${st.category || 'AI'})`,
+        st.description ? `${st.description}` : '',
+        axes.length ? `Extrapolation axes:\n${axesStr}` : '',
+        milestones.length ? `Projected milestones:\n${msStr}` : '',
+        `Evidence today: ${c.evidencePack.evidenceCount || 0} signals matched`
+      ].filter(Boolean).join('\n');
+    }).join('\n\n');
+
+    aiExtrapolationBlock = [
+      ``,
+      `## AI SECTION — STRUCTURED EXTRAPOLATION CONTEXT`,
+      `For AI section stories, use the extrapolation axes and milestones below as scaffolding.`,
+      `Your headlines and articles should be SPECIFIC about capabilities, numbers, and outcomes — not vague "AI advances" fluff.`,
+      `Example good headline: "Humanoid Robots Now Staff 40% of Amazon Warehouses" (specific, declarative, future-as-fact)`,
+      `Example bad headline: "AI Continues to Advance in Robotics" (vague, present-tense-y)`,
+      ``,
+      aiLines,
+      ``
+    ].join('\n');
+  }
+
   return [
     `You are an expert editorial planner for "The Future Times".`,
     `You are curating the edition published on ${editionDate} (yearsForward=${yearsForward}) based on baseline signals from ${day}.`,
     ``,
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
-    `- Pick exactly ${keyCount} key stories (the most click-worthy).`,
+    `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For every story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" a fast model can use to write the article.`,
     `- For key stories ONLY: also write a draftArticle with body (~4 paragraphs, NYT-style).`,
     ``,
-    `CRITICAL:`,
+    `CRITICAL — WRITE PREDICTIONS, NOT ANNIVERSARIES:`,
     `- Output STRICT JSON only. No markdown code fences, no commentary before/after the JSON.`,
-    `- Write as if this edition is published on ${editionDate}; do not mention forecasts, simulations, projections, or that you are an AI.`,
-    `- The curatedTitle/curatedDek must describe an ORIGINAL future event/outcome in the target year. Do NOT restate or lightly rewrite the baseline topic.`,
+    `- You are a journalist in ${editionDate}. Write as if the edition is published on ${editionDate}. Do not mention forecasts, simulations, projections, or that you are an AI.`,
+    `- MOST IMPORTANT: Every headline and story must be about a PLAUSIBLE FUTURE OUTCOME in ${editionDate}. NOT about today's news.`,
+    `- The baseline signals from ${day} are BACKGROUND CONTEXT that informs your understanding of the TOPIC DOMAIN (e.g., AI policy, trade relations, tech industry). They are NOT the story itself.`,
+    `- DO NOT write anniversary-style stories ("How X Reshaped Y", "The Legacy of Z", "X Years After [headline]"). These are lazy and uninteresting.`,
+    `- DO NOT write about today's specific minor news events as if they're important enough to remember years from now. Most won't be.`,
+    `- INSTEAD: Use the baseline signals to understand what DOMAIN/TREND is active, then write a credible, specific prediction about where that domain ends up by ${editionDate}.`,
+    `- Good example: If today's signal is "Anthropic raises $30bn", the ${editionDate} story should be about the AI industry landscape in that year (e.g., "AI Infrastructure Spending Hits $2 Trillion as Custom Chips Reshape Industry").`,
+    `- Bad example: "How Anthropic's $30bn Round Reshaped the AI Industry" (anniversary framing of a specific event).`,
+    `- curatedTitle/curatedDek must describe an ORIGINAL future event/outcome in the target year. Be specific: use numbers, company names, policy names, concrete outcomes.`,
     `- Prediction markets are inputs: infer the most likely outcome and report that outcome as what happened (do not pose the story as a question).`,
     `- Set exactly ONE hero story by setting hero:true for a single storyId (usually one of the keyStoryIds).`,
     `- Do not output question headlines.`,
-    `- topicTitle should be a short stable tag (2-6 words) that captures the underlying topic; it is used as a seed for downstream rendering.`,
-    `- futureEventSeed must be a single declarative sentence describing what happened (usable as the lede).`,
-    `- Keep sparkDirections short but concrete (who/what happened/what changed/what to cite).`,
-    `- For non-key (secondary) stories: it is OK to keep curatedDek very short and avoid prewriting; focus on topicTitle + sparkDirections so Codex Spark can draft on click.`,
-    `- For draftArticle.body: narrative paragraphs only (NYT-style), no section headings, and end with a short "Sources" list (4-8 links).`,
-    ``,
+    `- topicTitle should be a short stable tag (2-6 words) that captures the underlying DOMAIN/TREND (not the specific baseline event).`,
+    `- futureEventSeed must be a single declarative sentence describing what happened in ${editionDate} (usable as the lede). It should read like real news from that date.`,
+    `- Keep sparkDirections short but concrete (who/what happened/what changed in the target year).`,
+    `- For AI section stories: use the extrapolation axes to make specific, quantitative predictions. Mention speed/capability numbers, adoption percentages, cost figures where plausible.`,
+    `- For non-key (secondary) stories: it is OK to keep curatedDek very short; focus on topicTitle + sparkDirections so Codex Spark can draft on click.`,
+    `- For draftArticle.body: narrative paragraphs only (NYT-style), no section headings, written as real journalism from ${editionDate}. End with a short "Sources" list (4-8 links).`,
+    aiExtrapolationBlock,
     `JSON schema:`,
     `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":false,"hero":false,"futureEventSeed":"string","draftArticle":null}]}`,
     `For key stories, set draftArticle to {"title":"string","dek":"string","body":"string"} with 4+ paragraphs. For non-key stories, set draftArticle to null.`,

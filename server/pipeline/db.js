@@ -186,6 +186,44 @@ export function migrate(db) {
   `);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_day_event_traces_day ON day_event_traces(day);`);
 
-  const schemaVersion = '1';
+  // ── Standing Topics Registry (persistent, curated topics for structured forecasting) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS standing_topics (
+      topic_key TEXT PRIMARY KEY,
+      section TEXT NOT NULL,
+      category TEXT,
+      subcategory TEXT,
+      label TEXT NOT NULL,
+      description TEXT,
+      extrapolation_axes JSON,
+      keywords JSON,
+      milestones JSON,
+      enabled INTEGER DEFAULT 1,
+      created_at TEXT,
+      updated_at TEXT
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_standing_topics_section ON standing_topics(section);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_standing_topics_enabled ON standing_topics(enabled);`);
+
+  // ── Topic Evidence (maps signals to standing topics with relevance scoring) ──
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS topic_evidence (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      standing_topic_key TEXT NOT NULL,
+      signal_id INTEGER NOT NULL,
+      day TEXT NOT NULL,
+      relevance_score REAL,
+      matched_keywords JSON,
+      ai_category TEXT,
+      created_at TEXT,
+      UNIQUE(standing_topic_key, signal_id)
+    );
+  `);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_topic_evidence_topic ON topic_evidence(standing_topic_key);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_topic_evidence_day ON topic_evidence(day);`);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_topic_evidence_topic_day ON topic_evidence(standing_topic_key, day);`);
+
+  const schemaVersion = '2';
   db.prepare('INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)').run('schema_version', schemaVersion);
 }

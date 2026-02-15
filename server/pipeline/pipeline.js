@@ -59,11 +59,44 @@ const KEYWORDS_BY_SECTION = {
   'U.S.': ['congress', 'senate', 'house', 'supreme', 'court', 'election', 'federal', 'state', 'governor', 'immigration'],
   World: ['china', 'russia', 'europe', 'eu', 'ukraine', 'gaza', 'israel', 'iran', 'trade', 'nato', 'war', 'global'],
   Business: ['market', 'stocks', 'earnings', 'inflation', 'jobs', 'economy', 'recession', 'rates', 'bond', 'bank', 'ipo'],
-  Technology: ['ai', 'model', 'robot', 'chip', 'semiconductor', 'software', 'cloud', 'security', 'cyber', 'gpu', 'open-source'],
+  Technology: ['chip', 'semiconductor', 'software', 'cloud', 'security', 'cyber', 'gpu', 'open-source', 'quantum', 'blockchain', 'crypto'],
+  AI: [
+    'ai', 'artificial intelligence', 'machine learning', 'deep learning', 'neural network', 'llm', 'large language model',
+    'gpt', 'claude', 'gemini', 'openai', 'anthropic', 'deepmind', 'transformer', 'diffusion',
+    'robot', 'robotics', 'humanoid', 'autonomous', 'self-driving', 'autopilot',
+    'agent', 'agents', 'agentic', 'multi-agent', 'reasoning', 'inference',
+    'chatbot', 'copilot', 'foundation model', 'fine-tuning', 'rlhf', 'alignment',
+    'computer vision', 'nlp', 'natural language', 'text-to-image', 'text-to-video',
+    'agi', 'superintelligence', 'ai safety', 'ai regulation', 'ai governance',
+    'benchmark', 'training', 'compute', 'scaling', 'emergent', 'multimodal'
+  ],
   Arts: ['film', 'music', 'book', 'museum', 'artist', 'gallery', 'festival', 'theatre', 'theater', 'culture'],
   Lifestyle: ['health', 'travel', 'food', 'wellness', 'housing', 'fitness', 'work', 'school', 'family', 'fashion'],
   Opinion: ['opinion', 'editorial', 'column', 'debate', 'analysis', 'rights', 'privacy', 'democracy']
 };
+
+// AI sub-categories for finer-grained classification within the AI section
+const AI_CATEGORIES = {
+  'Foundation Models': ['llm', 'large language model', 'gpt', 'claude', 'gemini', 'foundation model', 'transformer', 'scaling', 'training', 'benchmark', 'multimodal', 'diffusion'],
+  'Robotics & Embodied AI': ['robot', 'robotics', 'humanoid', 'autonomous', 'self-driving', 'autopilot', 'embodied', 'manipulation', 'locomotion', 'drone'],
+  'AI Agents': ['agent', 'agents', 'agentic', 'multi-agent', 'tool use', 'function calling', 'reasoning', 'planning', 'orchestration', 'workflow'],
+  'AI Safety & Governance': ['ai safety', 'alignment', 'ai regulation', 'ai governance', 'agi', 'superintelligence', 'existential risk', 'bias', 'fairness', 'interpretability', 'explainability'],
+  'Applied AI': ['computer vision', 'nlp', 'natural language', 'text-to-image', 'text-to-video', 'speech', 'medical ai', 'drug discovery', 'protein', 'weather', 'climate ai'],
+  'AI Industry': ['openai', 'anthropic', 'deepmind', 'google ai', 'meta ai', 'microsoft ai', 'nvidia', 'compute', 'data center', 'gpu', 'tpu', 'chip', 'funding', 'valuation', 'acquisition']
+};
+
+function classifyAICategory(text) {
+  const lower = String(text || '').toLowerCase();
+  let best = { category: 'General AI', score: 0 };
+  for (const [category, keywords] of Object.entries(AI_CATEGORIES)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (lower.includes(kw)) score += 1;
+    }
+    if (score > best.score) best = { category, score };
+  }
+  return best.category;
+}
 
 function safeJson(value, fallback) {
   try {
@@ -226,7 +259,11 @@ function deriveThemePhrase(topicLabel, topicBrief) {
   if (hasAny(['inflation', 'cpi', 'prices', 'pricing'])) return 'Inflation and Prices';
   if (hasAny(['unemployment', 'jobs', 'wages', 'labor', 'pay'])) return 'The Labor Market';
   if (hasAny(['rates', 'yield', 'bond', 'bonds', 'fed', 'fedfunds'])) return 'Interest Rates';
-  if (hasAny(['ai', 'model', 'models', 'robot', 'robots', 'automation'])) return 'AI and Automation';
+  if (hasAny(['llm', 'language', 'gpt', 'claude', 'gemini', 'transformer', 'chatbot'])) return 'Foundation Models';
+  if (hasAny(['agent', 'agents', 'agentic', 'orchestration', 'reasoning'])) return 'AI Agents';
+  if (hasAny(['robot', 'robots', 'robotics', 'humanoid', 'autonomous', 'self-driving'])) return 'Robotics and Autonomy';
+  if (hasAny(['alignment', 'safety', 'regulation', 'governance', 'superintelligence', 'agi'])) return 'AI Safety and Governance';
+  if (hasAny(['ai', 'model', 'models', 'automation', 'machine', 'neural'])) return 'AI and Automation';
   if (hasAny(['chip', 'chips', 'semiconductor', 'semiconductors', 'gpu', 'gpus'])) return 'The Chip Supply Chain';
   if (hasAny(['climate', 'wildfire', 'wildfires', 'hurricane', 'hurricanes', 'heat', 'flood', 'floods'])) return 'Climate Adaptation';
   if (hasAny(['housing', 'rent', 'mortgage', 'mortgages'])) return 'Housing Affordability';
@@ -292,27 +329,40 @@ function buildHeadlineSeed(topicLabel, topicBrief, yearsForward, seed) {
   const baselineYear = 2026;
   const targetYear = baselineYear + (Number(yearsForward) || 0);
 
-  // Extract a short subject phrase (first ~60 chars of the cleaned topic)
+  // Extract a short DOMAIN PHRASE (2-6 words) from the headline to use in future templates.
+  // The goal: a raw headline like "'Nice shoes, mate': we road test Lego Crocs" should become
+  // something like "Fashion & Consumer Products", not the verbatim headline.
   let subject = base;
-  // Remove common lead-in patterns that don't work as headline subjects
-  subject = subject.replace(/^(The|A|An)\s+/i, '').trim();
-  if (subject.length > 65) {
-    // Take first clause
-    const clauseBreak = subject.search(/[,;:–—]/);
-    if (clauseBreak > 15 && clauseBreak < 70) {
-      subject = subject.slice(0, clauseBreak).trim();
+  // Strip quotes, attributions, and parentheticals
+  subject = subject.replace(/[''""]/g, '').replace(/\(.*?\)/g, '').trim();
+  // Remove common lead-in patterns
+  subject = subject.replace(/^(The|A|An|Why|How|What|Who|When|Where)\s+/i, '').trim();
+  // Take the first meaningful clause only (before comma, colon, dash, semicolon)
+  const clauseBreak = subject.search(/[,;:–—|]/);
+  if (clauseBreak > 5 && clauseBreak < 50) {
+    subject = subject.slice(0, clauseBreak).trim();
+  }
+  // If still too long, extract 2-4 key noun phrases
+  if (subject.length > 45) {
+    // Try to extract proper nouns and key terms
+    const words = subject.split(/\s+/).filter((w) => w.length > 2);
+    const importantWords = words.filter((w) => /^[A-Z]/.test(w) || /^(?:AI|US|UK|EU|GDP|NASA|UN)\b/i.test(w));
+    if (importantWords.length >= 2) {
+      subject = importantWords.slice(0, 4).join(' ');
     } else {
-      subject = subject.slice(0, 65).replace(/\s+\S*$/, '').trim();
+      subject = words.slice(0, 5).join(' ');
     }
   }
+  if (subject.length < 4) subject = 'Signal shift';
 
+  // Future-forward templates — these should NOT be anniversary framings
   const templates = [
-    `${subject}, ${targetYear}: What Changed`,
-    `${targetYear}: The Legacy of ${subject}`,
-    `How ${subject} Reshaped ${targetYear}`,
-    `${subject}: ${targetYear} Report`,
-    `The ${targetYear} Reckoning on ${subject}`,
-    `After ${subject}: A ${targetYear} Assessment`
+    `${targetYear}: A New Chapter for ${subject}`,
+    `${subject} Enters Uncharted Territory in ${targetYear}`,
+    `The ${targetYear} Outlook for ${subject}`,
+    `${targetYear}: What Comes Next for ${subject}`,
+    `${subject} Faces Critical Moment in ${targetYear}`,
+    `The Future of ${subject} Takes Shape in ${targetYear}`
   ];
   return templates[stableHash(seed) % templates.length];
 }
@@ -337,13 +387,13 @@ function buildDekSeed(topicLabel, topicBrief, yearsForward, editionDate, baselin
   const targetYear = Number(baselineYear) + (Number(yearsForward) || 0);
   const dateLabel = String(editionDate || '').trim() || String(targetYear);
 
-  // Build a dek that sets up the future angle using the real topic
+  // Build a dek as a plausible future sub-headline — NOT an anniversary or backward-looking recap
   const shortLabel = label.length > 80 ? label.slice(0, 80).replace(/\s+\S*$/, '').trim() : label;
   const options = [
-    `What started in ${baselineYear} with ${shortLabel} has become the defining issue of ${dateLabel}.`,
-    `${targetYear} brings a reckoning for ${shortLabel} that few predicted in ${baselineYear}.`,
-    `The signals from ${baselineYear} around ${shortLabel} have matured into policy, markets, and daily life by ${dateLabel}.`,
-    `From ${baselineYear} headline to ${dateLabel} reality: how ${shortLabel} reshaped what comes next.`
+    `By ${targetYear}, the landscape around ${shortLabel} has transformed in ways that affect millions of people daily.`,
+    `New policies, technologies, and market forces have reshaped ${shortLabel} as of ${dateLabel}.`,
+    `A detailed look at where ${shortLabel} stands in ${targetYear} — and what it means for the decade ahead.`,
+    `The forces driving ${shortLabel} have accelerated, producing outcomes that were speculative just years ago.`
   ];
   const seed = `${baselineDay}|${editionDate}|${yearsForward}|${label}`;
   return options[stableHash(seed) % options.length];
@@ -427,6 +477,7 @@ export class FutureTimesPipeline {
     migrate(this.db);
     this.entityDicts = loadEntityDicts(this.rootDir);
     this.loadSourcesIntoDb();
+    this.loadStandingTopicsIntoDb();
   }
 
   loadSourcesIntoDb() {
@@ -459,6 +510,152 @@ export class FutureTimesPipeline {
         safeJson(s, {})
       );
     }
+  }
+
+  loadStandingTopicsIntoDb() {
+    const topicsFile = path.resolve(this.rootDir, 'config', 'standing-topics.json');
+    let config;
+    try {
+      const raw = fs.readFileSync(topicsFile, 'utf8');
+      config = JSON.parse(raw);
+    } catch {
+      return; // No standing topics file yet — that's fine
+    }
+    const topics = Array.isArray(config?.topics) ? config.topics : [];
+    if (!topics.length) return;
+
+    const stmt = this.db.prepare(`
+      INSERT INTO standing_topics(topic_key, section, category, subcategory, label, description, extrapolation_axes, keywords, milestones, enabled, created_at, updated_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(topic_key) DO UPDATE SET
+        section=excluded.section,
+        category=excluded.category,
+        subcategory=excluded.subcategory,
+        label=excluded.label,
+        description=excluded.description,
+        extrapolation_axes=excluded.extrapolation_axes,
+        keywords=excluded.keywords,
+        milestones=excluded.milestones,
+        enabled=excluded.enabled,
+        updated_at=excluded.updated_at;
+    `);
+
+    const now = isoNow();
+    for (const t of topics) {
+      stmt.run(
+        String(t.topic_key),
+        String(t.section || 'AI'),
+        t.category || null,
+        t.subcategory || null,
+        String(t.label || t.topic_key),
+        t.description || null,
+        safeJson(t.extrapolation_axes, []),
+        safeJson(t.keywords, []),
+        safeJson(t.milestones, []),
+        t.enabled === false ? 0 : 1,
+        now,
+        now
+      );
+    }
+  }
+
+  // ── Standing Topics: get all enabled ──
+  getStandingTopics(section = null) {
+    if (section) {
+      return this.db.prepare('SELECT * FROM standing_topics WHERE enabled=1 AND section=? ORDER BY category, label').all(section);
+    }
+    return this.db.prepare('SELECT * FROM standing_topics WHERE enabled=1 ORDER BY section, category, label').all();
+  }
+
+  // ── Evidence Mapping: link signals to standing topics ──
+  matchSignalsToStandingTopics(day) {
+    const standingTopics = this.getStandingTopics();
+    if (!standingTopics.length) return;
+
+    const signals = this.db.prepare(`
+      SELECT signal_id, section, title, summary, keywords_json
+      FROM signals WHERE day=?
+    `).all(day);
+
+    const insertEvidence = this.db.prepare(`
+      INSERT OR IGNORE INTO topic_evidence(standing_topic_key, signal_id, day, relevance_score, matched_keywords, ai_category, created_at)
+      VALUES(?, ?, ?, ?, ?, ?, ?);
+    `);
+
+    const now = isoNow();
+
+    for (const signal of signals) {
+      const combined = `${signal.title} ${signal.summary || ''}`.toLowerCase();
+      const signalKeywords = safeParseJson(signal.keywords_json, []);
+
+      for (const st of standingTopics) {
+        const stKeywords = safeParseJson(st.keywords, []);
+        const matched = [];
+        let score = 0;
+
+        for (const kw of stKeywords) {
+          const kwLower = String(kw).toLowerCase();
+          if (combined.includes(kwLower)) {
+            matched.push(kw);
+            // Multi-word keyword matches are worth more
+            score += kwLower.includes(' ') ? 2 : 1;
+          }
+        }
+
+        // Also check keyword overlap
+        for (const sk of signalKeywords) {
+          const skLower = String(sk).toLowerCase();
+          for (const stk of stKeywords) {
+            if (String(stk).toLowerCase() === skLower && !matched.includes(stk)) {
+              matched.push(stk);
+              score += 0.5;
+            }
+          }
+        }
+
+        // Only create evidence link if there's meaningful overlap
+        if (score >= 2 || matched.length >= 2) {
+          const relevance = Math.min(1.0, score / 8);
+          const aiCat = st.section === 'AI' ? classifyAICategory(combined) : null;
+          insertEvidence.run(
+            st.topic_key,
+            signal.signal_id,
+            day,
+            relevance,
+            safeJson(matched, []),
+            aiCat,
+            now
+          );
+        }
+      }
+    }
+  }
+
+  // ── Get evidence for a standing topic over a rolling window ──
+  getTopicEvidence(topicKey, days = 7) {
+    return this.db.prepare(`
+      SELECT te.*, s.title AS signal_title, s.summary AS signal_summary, s.canonical_url, s.citations_json, s.published_at
+      FROM topic_evidence te
+      JOIN signals s ON s.signal_id = te.signal_id
+      WHERE te.standing_topic_key = ?
+      ORDER BY te.day DESC, te.relevance_score DESC
+      LIMIT ?;
+    `).all(topicKey, days * 20);
+  }
+
+  // ── Get evidence counts per standing topic for a day ──
+  getEvidenceSummary(day) {
+    return this.db.prepare(`
+      SELECT te.standing_topic_key, st.label, st.category, st.section,
+             COUNT(*) AS evidence_count,
+             AVG(te.relevance_score) AS avg_relevance,
+             MAX(te.relevance_score) AS max_relevance
+      FROM topic_evidence te
+      JOIN standing_topics st ON st.topic_key = te.standing_topic_key
+      WHERE te.day = ?
+      GROUP BY te.standing_topic_key
+      ORDER BY evidence_count DESC;
+    `).all(day);
   }
 
   getLatestDay() {
@@ -1035,6 +1232,7 @@ export class FutureTimesPipeline {
       await Promise.all(workers);
 
       this.processSignalsForDay(day);
+      this.matchSignalsToStandingTopics(day);
       this.buildTopicsForDay(day);
       this.buildEditionsForDay(day);
       this.storeDaySignalSnapshot(day);
@@ -1379,6 +1577,18 @@ export class FutureTimesPipeline {
 
       const storiesForEdition = [];
       for (const section of SECTION_ORDER) {
+        // ── HYBRID PATH: AI section uses standing topics + evidence ──
+        if (section === 'AI') {
+          const aiStandingTopics = this.getStandingTopics('AI');
+          const aiStories = this._buildAISectionStories({
+            day, yearsForward, editionDate, aiStandingTopics,
+            signalsById, econSignals, marketSignals
+          });
+          storiesForEdition.push(...aiStories);
+          continue;
+        }
+
+        // ── EMERGENT PATH: all other sections use clustered topics ──
         const sectionPicks = pickTopicForSection(section, 5);
         for (let i = 0; i < sectionPicks.length; i++) {
           const topic = sectionPicks[i];
@@ -1469,6 +1679,198 @@ export class FutureTimesPipeline {
         );
       }
     }
+  }
+
+  // ── Build AI section stories from standing topics + evidence ──
+  _buildAISectionStories({ day, yearsForward, editionDate, aiStandingTopics, signalsById, econSignals, marketSignals }) {
+    const section = 'AI';
+    const stories = [];
+    const baselineYear = 2026;
+    const targetYear = baselineYear + (Number(yearsForward) || 0);
+
+    // Sort standing topics by amount of fresh evidence (most active first)
+    const topicsWithEvidence = aiStandingTopics.map((st) => {
+      const evidence = this.db.prepare(`
+        SELECT te.signal_id, te.relevance_score, te.matched_keywords, te.ai_category,
+               s.title, s.summary, s.canonical_url, s.citations_json, s.published_at
+        FROM topic_evidence te
+        JOIN signals s ON s.signal_id = te.signal_id
+        WHERE te.standing_topic_key = ? AND te.day = ?
+        ORDER BY te.relevance_score DESC
+        LIMIT 8;
+      `).all(st.topic_key, day);
+
+      return { ...st, evidence, evidenceCount: evidence.length };
+    });
+
+    // Sort: topics with most evidence first, but always include all standing topics
+    topicsWithEvidence.sort((a, b) => b.evidenceCount - a.evidenceCount);
+
+    // Take top 6 standing topics (one per category ideally)
+    const usedCategories = new Set();
+    const selected = [];
+    // First pass: pick one from each category that has evidence
+    for (const st of topicsWithEvidence) {
+      if (selected.length >= 6) break;
+      if (st.category && usedCategories.has(st.category)) continue;
+      selected.push(st);
+      if (st.category) usedCategories.add(st.category);
+    }
+    // Second pass: fill remaining slots
+    for (const st of topicsWithEvidence) {
+      if (selected.length >= 6) break;
+      if (selected.some((s) => s.topic_key === st.topic_key)) continue;
+      selected.push(st);
+    }
+
+    for (let i = 0; i < selected.length; i++) {
+      const st = selected[i];
+      const axes = safeParseJson(st.extrapolation_axes, []);
+      const milestones = safeParseJson(st.milestones, []);
+      const stKeywords = safeParseJson(st.keywords, []);
+
+      // Build evidence signals for the evidence pack
+      const evidenceSignals = st.evidence.map((e) => ({
+        signal_id: e.signal_id,
+        title: e.title,
+        summary: e.summary,
+        canonical_url: e.canonical_url,
+        citations_json: e.citations_json,
+        published_at: e.published_at
+      }));
+
+      // Find relevant milestone for this year offset
+      const relevantMilestone = milestones.find((m) => Math.abs((m.year || 0) - targetYear) <= 1);
+
+      // Build a rich brief from standing topic description + evidence
+      const evidenceBrief = st.evidence.slice(0, 3).map((e) => {
+        const summary = String(e.summary || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        return `- ${summary.slice(0, 200)}`;
+      }).join('\n');
+
+      const topicBrief = `${st.description || ''}\n\nLatest evidence:\n${evidenceBrief || '(No fresh signals today)'}`;
+
+      // Build headline that uses standing topic label + extrapolation
+      const topicSlug = slugify(st.topic_key, 58);
+      const angle = ANGLES[i % ANGLES.length];
+      const storyId = buildStoryId(day, yearsForward, section, topicSlug, angle);
+
+      let headline;
+      if (yearsForward === 0) {
+        // Current day: use latest evidence as headline driver
+        const topSignal = st.evidence[0];
+        headline = topSignal ? cleanTopicForHeadline(topSignal.title) : st.label;
+      } else {
+        // Future: extrapolate from standing topic
+        headline = this._buildAIFutureHeadline(st, targetYear, relevantMilestone, storyId);
+      }
+
+      let dek;
+      if (yearsForward === 0) {
+        dek = st.evidence.length
+          ? `${st.label}: ${st.evidence.length} signals tracked today. ${st.description?.slice(0, 120) || ''}`
+          : st.description || st.label;
+      } else {
+        dek = this._buildAIFutureDek(st, targetYear, baselineYear, relevantMilestone, axes, editionDate);
+      }
+
+      const meta = `AI${st.category ? ' / ' + st.category : ''} • ${editionDate}`;
+
+      // Build evidence pack with standing-topic enrichments
+      const citations = evidenceSignals.slice(0, 6).map((s, idx) => ({
+        id: `c${idx + 1}`,
+        title: s.title,
+        url: s.canonical_url || '',
+        source: (safeParseJson(s.citations_json, [])[0] || {}).source || '',
+        publishedAt: s.published_at || null,
+        summary: String(s.summary || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 280)
+      }));
+
+      const evidencePack = {
+        grounding: 'standing_topic',
+        section,
+        editionDate,
+        yearsForward,
+        standingTopic: {
+          key: st.topic_key,
+          label: st.label,
+          category: st.category,
+          description: st.description,
+          extrapolationAxes: axes,
+          milestones: milestones.filter((m) => m.year >= targetYear - 1 && m.year <= targetYear + 2),
+          keywords: stKeywords.slice(0, 12)
+        },
+        topic: {
+          topicId: st.topic_key,
+          label: st.label,
+          theme: st.category || 'AI and Automation',
+          brief: topicBrief,
+          horizon: yearsForward <= 2 ? 'near' : yearsForward <= 5 ? 'mid' : 'long'
+        },
+        citations,
+        markets: [],
+        econ: {},
+        signals: evidenceSignals.slice(0, 6).map((s) => ({
+          label: s.title,
+          value: (safeParseJson(s.citations_json, [])[0] || {}).source || ''
+        })),
+        aiCategory: st.category,
+        evidenceCount: st.evidenceCount
+      };
+
+      stories.push({
+        storyId,
+        section,
+        rank: i + 1,
+        angle,
+        topicId: st.topic_key,
+        topicLabel: st.label,
+        title: headline,
+        dek,
+        meta,
+        image: 'assets/img/humanoids-labor-market.svg',
+        prompt: `Futuristic editorial illustration: ${st.label} in ${targetYear}. ${st.category || 'AI'} theme. Newspaper photography style.`,
+        evidencePack
+      });
+    }
+
+    return stories;
+  }
+
+  _buildAIFutureHeadline(standingTopic, targetYear, milestone, seed) {
+    const label = standingTopic.label || 'AI';
+    const category = standingTopic.category || '';
+
+    if (milestone?.event) {
+      // Use the milestone as the headline basis
+      const event = String(milestone.event).slice(0, 80);
+      return `${targetYear}: ${event}`;
+    }
+
+    const templates = [
+      `${label} Reaches New Milestone in ${targetYear}`,
+      `${targetYear}: ${label} Enters a New Phase`,
+      `${category || label} Industry Crosses Critical Threshold in ${targetYear}`,
+      `The ${targetYear} ${label} Landscape: What's Changed`,
+      `${label} Deployment Accelerates as ${targetYear} Reshapes the Market`,
+      `New ${label} Capabilities Arrive Ahead of Schedule in ${targetYear}`
+    ];
+    return templates[stableHash(seed) % templates.length];
+  }
+
+  _buildAIFutureDek(standingTopic, targetYear, baselineYear, milestone, axes, editionDate) {
+    const label = standingTopic.label || 'AI';
+
+    if (milestone?.event) {
+      return `By ${editionDate}, ${String(milestone.event).toLowerCase()}. The pace of change in ${label.toLowerCase()} continues to surprise even optimistic forecasters.`;
+    }
+
+    if (axes.length) {
+      const axisNames = axes.slice(0, 2).map((a) => a.axis || a.description || '').filter(Boolean).join(' and ');
+      return `Advances in ${axisNames} are reshaping ${label.toLowerCase()} in ${targetYear}, with concrete implications for industries, workers, and policymakers worldwide.`;
+    }
+
+    return `The ${label.toLowerCase()} landscape of ${targetYear} has evolved rapidly, with new capabilities, market dynamics, and regulatory frameworks redefining the field.`;
   }
 
   buildCurationSnapshot(day) {

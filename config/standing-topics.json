@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "description": "Persistent standing topics for structured forecasting. News signals feed INTO these topics rather than defining them.",
+  "topics": [
+    {
+      "topic_key": "ai/foundation-models",
+      "section": "AI",
+      "category": "Foundation Models",
+      "subcategory": null,
+      "label": "Foundation Models & LLMs",
+      "description": "The evolution of large language models, multimodal models, and foundation architectures — scaling laws, capability breakthroughs, and the race between labs.",
+      "extrapolation_axes": [
+        {"axis": "capability", "description": "Model intelligence, reasoning depth, context windows, multimodal scope"},
+        {"axis": "cost", "description": "Training cost, inference cost per token, efficiency gains"},
+        {"axis": "accessibility", "description": "Open-source vs. closed, API pricing, on-device deployment"},
+        {"axis": "speed", "description": "Tokens per second, latency, real-time capability"}
+      ],
+      "keywords": ["llm", "large language model", "gpt", "claude", "gemini", "llama", "transformer", "scaling", "benchmark", "training", "context window", "multimodal", "foundation model", "fine-tuning", "inference", "token", "parameter", "weights", "distillation"],
+      "milestones": [
+        {"year": 2026, "event": "Models routinely pass expert-level benchmarks across domains"},
+        {"year": 2028, "event": "On-device models match 2025 cloud model quality"},
+        {"year": 2030, "event": "Cost of GPT-4-class inference drops below $0.001/1K tokens"},
+        {"year": 2033, "event": "Models demonstrate sustained multi-hour autonomous research"}
+      ]
+    },
+    {
+      "topic_key": "ai/agents",
+      "section": "AI",
+      "category": "AI Agents",
+      "subcategory": null,
+      "label": "AI Agents & Autonomous Systems",
+      "description": "Software agents that plan, use tools, browse the web, write code, and orchestrate multi-step tasks with minimal human oversight.",
+      "extrapolation_axes": [
+        {"axis": "autonomy", "description": "Length of unsupervised task chains, decision authority"},
+        {"axis": "reliability", "description": "Error rates, hallucination frequency, self-correction ability"},
+        {"axis": "integration", "description": "API ecosystems, tool use breadth, enterprise adoption"},
+        {"axis": "collaboration", "description": "Multi-agent coordination, human-agent teaming"}
+      ],
+      "keywords": ["agent", "agents", "agentic", "tool use", "function calling", "orchestration", "planning", "multi-agent", "autonomous", "workflow", "copilot", "assistant", "computer use", "browser use", "code generation"],
+      "milestones": [
+        {"year": 2026, "event": "Coding agents can ship production features end-to-end"},
+        {"year": 2028, "event": "Agent marketplaces become standard enterprise infrastructure"},
+        {"year": 2030, "event": "Agents manage complex multi-week projects autonomously"},
+        {"year": 2034, "event": "AI agents comprise >30% of knowledge work tasks"}
+      ]
+    },
+    {
+      "topic_key": "ai/robotics",
+      "section": "AI",
+      "category": "Robotics & Embodied AI",
+      "subcategory": null,
+      "label": "Robotics & Embodied Intelligence",
+      "description": "Physical robots — humanoids, industrial arms, drones, autonomous vehicles — increasingly powered by foundation-model brains.",
+      "extrapolation_axes": [
+        {"axis": "dexterity", "description": "Fine motor manipulation, human-like movement"},
+        {"axis": "cost", "description": "Unit economics, manufacturing scale, price per robot"},
+        {"axis": "deployment", "description": "Warehouses, hospitals, homes, outdoor environments"},
+        {"axis": "intelligence", "description": "VLM-powered perception, task generalization, learning from demonstration"}
+      ],
+      "keywords": ["robot", "robotics", "humanoid", "manipulation", "locomotion", "drone", "autonomous vehicle", "self-driving", "embodied", "physical ai", "tesla bot", "optimus", "figure", "boston dynamics", "warehouse", "factory"],
+      "milestones": [
+        {"year": 2027, "event": "First commercial humanoid robots deployed in warehouses at scale"},
+        {"year": 2029, "event": "Humanoid robots below $50K available for enterprise purchase"},
+        {"year": 2031, "event": "Consumer home-assistant robots reach mass market"},
+        {"year": 2035, "event": "Robots perform 20% of current manual labor tasks globally"}
+      ]
+    },
+    {
+      "topic_key": "ai/safety-governance",
+      "section": "AI",
+      "category": "AI Safety & Governance",
+      "subcategory": null,
+      "label": "AI Safety, Alignment & Regulation",
+      "description": "The technical challenge of aligning powerful AI with human values, plus the regulatory and governance frameworks emerging worldwide.",
+      "extrapolation_axes": [
+        {"axis": "regulation", "description": "Government policies, EU AI Act enforcement, US executive orders"},
+        {"axis": "alignment-tech", "description": "RLHF, constitutional AI, mechanistic interpretability, red-teaming"},
+        {"axis": "risk-awareness", "description": "Public concern levels, corporate responsibility, insurance markets"},
+        {"axis": "international", "description": "Global coordination, AI treaties, compute governance"}
+      ],
+      "keywords": ["ai safety", "alignment", "regulation", "governance", "ai act", "executive order", "interpretability", "explainability", "bias", "fairness", "red team", "rlhf", "constitutional ai", "agi", "superintelligence", "existential risk", "responsible ai", "audit", "compliance"],
+      "milestones": [
+        {"year": 2026, "event": "EU AI Act enters full enforcement; first major fines issued"},
+        {"year": 2028, "event": "International AI safety treaty signed by major powers"},
+        {"year": 2030, "event": "Mandatory AI auditing becomes standard in financial services and healthcare"},
+        {"year": 2034, "event": "Formal verification methods cover 50% of deployed high-risk AI systems"}
+      ]
+    },
+    {
+      "topic_key": "ai/applied",
+      "section": "AI",
+      "category": "Applied AI",
+      "subcategory": null,
+      "label": "Applied AI & Scientific Discovery",
+      "description": "AI applied to biology, medicine, materials science, climate, and other domains — accelerating discovery and transforming industries.",
+      "extrapolation_axes": [
+        {"axis": "healthcare", "description": "Diagnostics, drug discovery, protein folding, personalized medicine"},
+        {"axis": "scientific-discovery", "description": "Materials, energy, climate modeling, mathematical proofs"},
+        {"axis": "creative", "description": "Image/video/music generation, design tools, content creation"},
+        {"axis": "enterprise", "description": "Customer service, legal, finance, HR automation"}
+      ],
+      "keywords": ["drug discovery", "protein", "alphafold", "medical ai", "diagnostics", "radiology", "clinical", "materials science", "weather", "climate ai", "text-to-image", "text-to-video", "generative", "midjourney", "sora", "creative ai", "enterprise ai", "customer service", "legal ai"],
+      "milestones": [
+        {"year": 2027, "event": "First AI-designed drug reaches Phase 3 clinical trials"},
+        {"year": 2029, "event": "AI weather models outperform all traditional models for 10-day forecasts"},
+        {"year": 2031, "event": "AI-generated content becomes majority of digital media consumed"},
+        {"year": 2035, "event": "AI co-scientists credited on >10% of major research papers"}
+      ]
+    },
+    {
+      "topic_key": "ai/industry-compute",
+      "section": "AI",
+      "category": "AI Industry",
+      "subcategory": null,
+      "label": "AI Industry, Compute & Economics",
+      "description": "The business of AI — chip manufacturing, data centers, GPU supply, startup funding, big tech competition, and the economics of intelligence.",
+      "extrapolation_axes": [
+        {"axis": "compute", "description": "GPU supply, custom chips, energy consumption, efficiency"},
+        {"axis": "market-size", "description": "Revenue, market cap, startup valuations, M&A"},
+        {"axis": "competition", "description": "Lab rivalry, open vs closed, geopolitics of compute"},
+        {"axis": "employment", "description": "Job displacement, new roles, wage effects, retraining"}
+      ],
+      "keywords": ["nvidia", "gpu", "tpu", "compute", "data center", "energy", "power", "openai", "anthropic", "google", "meta", "microsoft", "funding", "valuation", "acquisition", "startup", "ipo", "revenue", "market cap", "chip", "semiconductor", "asml", "tsmc"],
+      "milestones": [
+        {"year": 2026, "event": "Global AI spending exceeds $500B annually"},
+        {"year": 2028, "event": "Custom AI chips from non-Nvidia vendors capture 40% of training market"},
+        {"year": 2030, "event": "AI industry revenue surpasses $1T; first AI-native company in top-10 by market cap"},
+        {"year": 2034, "event": "AI contributes measurably (>2%) to global GDP growth"}
+      ]
+    }
+  ]
+}

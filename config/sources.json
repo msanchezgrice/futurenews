@@ -107,19 +107,82 @@
     },
 
     {
+      "source_id": "rss-ai-hackernews",
+      "name": "Hacker News (Best)",
+      "type": "rss",
+      "section": "AI",
+      "url": "https://hnrss.org/best?q=AI+OR+LLM+OR+GPT+OR+machine+learning+OR+robotics+OR+autonomous+OR+neural+OR+anthropic+OR+openai",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-ai-techcrunch",
+      "name": "TechCrunch AI",
+      "type": "rss",
+      "section": "AI",
+      "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-ai-verge",
+      "name": "The Verge AI",
+      "type": "rss",
+      "section": "AI",
+      "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-ai-mittech",
+      "name": "MIT Technology Review AI",
+      "type": "rss",
+      "section": "AI",
+      "url": "https://www.technologyreview.com/feed/",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+    {
+      "source_id": "rss-ai-ars-ai",
+      "name": "Ars Technica AI",
+      "type": "rss",
+      "section": "AI",
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+    {
       "source_id": "rss-arxiv-cs-ai",
       "name": "arXiv cs.AI",
       "type": "rss",
-      "section": "Technology",
+      "section": "AI",
       "url": "http://export.arxiv.org/rss/cs.AI",
       "enabled": true,
       "fetch_interval_minutes": 240
     },
     {
-      "source_id": "rss-arxiv-cs-ro",
-      "name": "arXiv cs.RO",
+      "source_id": "rss-arxiv-cs-lg",
+      "name": "arXiv cs.LG (Machine Learning)",
       "type": "rss",
-      "section": "Technology",
+      "section": "AI",
+      "url": "http://export.arxiv.org/rss/cs.LG",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "rss-arxiv-cs-cl",
+      "name": "arXiv cs.CL (NLP)",
+      "type": "rss",
+      "section": "AI",
+      "url": "http://export.arxiv.org/rss/cs.CL",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "rss-arxiv-cs-ro",
+      "name": "arXiv cs.RO (Robotics)",
+      "type": "rss",
+      "section": "AI",
       "url": "http://export.arxiv.org/rss/cs.RO",
       "enabled": true,
       "fetch_interval_minutes": 240

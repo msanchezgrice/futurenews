@@ -3,7 +3,7 @@
 
   const MAX_YEARS = 10;
   const DEFAULT_YEARS = 5;
-  const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'Arts', 'Lifestyle', 'Opinion'];
+  const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'AI', 'Arts', 'Lifestyle', 'Opinion'];
   const SECTION_ALL = 'All';
   const EDITION_CACHE_KEY = 'future-times-edition-cache-v16';
   const ARTICLE_CACHE_KEY = 'future-times-article-cache-v16';
@@ -687,7 +687,7 @@
       card.dataset.section = sectionName;
 
       const title = document.createElement('h3');
-      title.className = 'section-panel-title';
+      title.className = 'section-panel-title' + (sectionName === 'AI' ? ' ai-section' : '');
       title.textContent = sectionName;
       card.appendChild(title);
 
@@ -707,10 +707,12 @@
 
         const sparkIcon = document.createElement('span');
         sparkIcon.className = 'spark';
-        sparkIcon.textContent = '✦';
+        sparkIcon.textContent = (article.section === 'AI') ? '◆' : '✦';
+        if (article.section === 'AI') sparkIcon.style.color = '#6366f1';
 
         const badgeSection = document.createElement('strong');
         badgeSection.textContent = article.section || sectionName;
+        if (article.section === 'AI') badgeSection.style.color = '#4f46e5';
 
         const badgeEdition = document.createElement('span');
         badgeEdition.style.color = 'var(--muted)';
