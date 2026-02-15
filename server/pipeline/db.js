@@ -5,16 +5,16 @@ import { DatabaseSync } from 'node:sqlite';
 export function openDatabase(dbFilePath) {
   let effectivePath = dbFilePath;
 
-  // In Vercel serverless (read-only filesystem), copy DB to /tmp for write access
+  // In Vercel serverless (read-only filesystem), copy DB to /tmp for write access.
+  // On every new deployment, the bundled DB has pre-curated data that must be copied.
   if (process.env.VERCEL && dbFilePath && !dbFilePath.startsWith('/tmp')) {
     const tmpPath = path.join('/tmp', path.basename(dbFilePath));
     try {
-      // Only seed /tmp on true cold start (no file yet). Never overwrite —
-      // the /tmp copy is the live DB with curations from previous invocations.
-      if (!fs.existsSync(tmpPath)) {
-        if (fs.existsSync(dbFilePath)) {
-          fs.copyFileSync(dbFilePath, tmpPath);
-        }
+      // Always copy from the bundled DB — each deploy bundles the latest curated data.
+      // Runtime curations from the same function instance (warm start) will be written
+      // back to /tmp, but on cold start we always start from the deploy-time snapshot.
+      if (fs.existsSync(dbFilePath)) {
+        fs.copyFileSync(dbFilePath, tmpPath);
       }
       effectivePath = tmpPath;
     } catch (err) {
