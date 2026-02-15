@@ -2009,21 +2009,6 @@ async function requestHandler(req, res) {
       return;
     }
 
-    // Temporary debug — remove after verifying
-    if (pathname === '/api/debug-auth') {
-      sendJson(res, {
-        hasAdminSecret: Boolean(ADMIN_SECRET),
-        adminSecretLen: ADMIN_SECRET.length,
-        envAdminSecret: Boolean(process.env.ADMIN_SECRET),
-        envFtAdminSecret: Boolean(process.env.FT_ADMIN_SECRET),
-        envAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
-        isVercel: Boolean(process.env.VERCEL),
-        reqUrl: req.url,
-        qsSecret: url.searchParams.get('secret') ? 'present' : 'absent',
-        secretMatch: url.searchParams.get('secret') === ADMIN_SECRET
-      });
-      return;
-    }
 
     if (pathname === '/api/config') {
       if (req.method !== 'GET') return send405(res, 'GET');
