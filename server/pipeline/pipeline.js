@@ -2194,6 +2194,20 @@ export class FutureTimesPipeline {
         }
 
         editionCount++;
+
+        // Bake curated titles/deks into the stored edition payload so that
+        // subsequent cold-start Vercel instances serve curated content
+        // without needing access to story_curations in /tmp.
+        const editionRow = this.db.prepare('SELECT payload_json FROM editions WHERE day=? AND years_forward=?').get(normalized, yearsForward);
+        if (editionRow) {
+          const editionPayload = safeParseJson(editionRow.payload_json, null);
+          if (editionPayload) {
+            const patched = this.applyStoryCurationsToEditionPayload(editionPayload);
+            this.db.prepare(`
+              UPDATE editions SET payload_json=?, generated_at=? WHERE day=? AND years_forward=?
+            `).run(safeJson(patched, {}), isoNow(), normalized, yearsForward);
+          }
+        }
       }
 
       this.lastCuration = isoNow();
