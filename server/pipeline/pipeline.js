@@ -775,10 +775,12 @@ export class FutureTimesPipeline {
       if (!c || !c.plan) return a;
       const curatedTitle = String(c.plan.curatedTitle || c.plan.title || '').trim();
       const curatedDek = String(c.plan.curatedDek || c.plan.dek || '').trim();
+      const draftBody = c.plan.draftArticle?.body || '';
       return {
         ...a,
         title: curatedTitle || a.title,
         dek: curatedDek || a.dek,
+        body: (draftBody && draftBody.length > 100) ? draftBody : (a.body || ''),
         confidence: Number(c.plan.confidence) || 0,
         curation: {
           key: Boolean(c.key) || Boolean(c.plan.key),
@@ -797,7 +799,15 @@ export class FutureTimesPipeline {
       };
     });
 
-    const resolvedHeroId = heroOverride || base.heroId || base.heroStoryId || (patchedArticles[0] ? patchedArticles[0].id : null);
+    // Only include articles the LLM actually curated (confidence > 0 means the LLM touched it)
+    const curatedArticles = patchedArticles.filter((a) => {
+      const conf = Number(a.confidence);
+      return conf > 0;
+    });
+    // Fall back to all articles if none were curated (first run, no curation yet)
+    const finalArticles = curatedArticles.length > 0 ? curatedArticles : patchedArticles;
+
+    const resolvedHeroId = heroOverride || base.heroId || base.heroStoryId || (finalArticles[0] ? finalArticles[0].id : null);
     const dayCuration = this.getDayCuration(base.day);
     const curationGeneratedAt = dayCuration?.generatedAt || maxStoryCurationAt || null;
     return {
@@ -815,7 +825,7 @@ export class FutureTimesPipeline {
         : curationGeneratedAt
           ? { generatedAt: curationGeneratedAt, provider: null, model: null, error: null }
           : null,
-      articles: patchedArticles
+      articles: finalArticles
     };
   }
 

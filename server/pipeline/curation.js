@@ -92,8 +92,9 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       .map((s) => `- ${String(s.title || '').slice(0, 160)} (${String(s.source || '').slice(0, 40)})`)
       .join('\n');
 
-  // Cap candidates to top 8 to keep prompt small enough for Vercel 300s limit
-  const cappedCandidates = (candidates || []).slice(0, 8);
+  // Send top 20 candidates — LLM writes full articles for 3 key stories only.
+  // Non-key stories get curatedTitle/curatedDek/sparkDirections (short).
+  const cappedCandidates = (candidates || []).slice(0, 20);
   const candidateLines = cappedCandidates
     .map((c) => {
       const topic = c.topic || {};
@@ -109,9 +110,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       return [
         `- storyId: ${c.storyId}`,
         `  section: ${c.section} rank: ${c.rank}`,
-        `  topic: ${String(topic.label || c.topicLabel || '').slice(0, 130)}`,
-        `  brief: ${String(topic.brief || '').replace(/\s+/g, ' ').slice(0, 180)}`,
-        citeLines ? `  citations:\n${citeLines}` : null
+        `  topic: ${String(topic.label || c.topicLabel || '').slice(0, 100)}`,
+        `  brief: ${String(topic.brief || '').replace(/\s+/g, ' ').slice(0, 120)}`
       ].filter(Boolean).join('\n');
     })
     .join('\n\n');
@@ -155,8 +155,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
-    `- For KEY stories ONLY: write a full draftArticle with body (~3-4 paragraphs, NYT-style narrative).`,
-    `- For NON-KEY stories: set draftArticle to null. A fast model will generate articles on demand using sparkDirections.`,
+    `- For KEY stories ONLY (max ${keyCount}): write a full draftArticle with body (~3-4 short paragraphs, NYT-style).`,
+    `- For NON-KEY stories: set draftArticle to null. Keep sparkDirections under 50 words. A fast model generates articles on demand.`,
     `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
