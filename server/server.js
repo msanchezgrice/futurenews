@@ -2937,7 +2937,17 @@ async function start() {
   process.exit(1);
 }
 
-start().catch((err) => {
-  console.error('Failed to start server:', err?.message || err);
-  process.exit(1);
-});
+// Export for Vercel serverless + local start
+export { requestHandler };
+
+// Only auto-start when run directly (not imported by Vercel)
+const isDirectRun = process.argv[1] && (
+  process.argv[1].endsWith('/server.js') ||
+  process.argv[1].endsWith('server/server.js')
+);
+if (isDirectRun) {
+  start().catch((err) => {
+    console.error('Failed to start server:', err?.message || err);
+    process.exit(1);
+  });
+}

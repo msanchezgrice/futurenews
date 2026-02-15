@@ -3,8 +3,26 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 export function openDatabase(dbFilePath) {
-  fs.mkdirSync(path.dirname(dbFilePath), { recursive: true });
-  const db = new DatabaseSync(dbFilePath);
+  let effectivePath = dbFilePath;
+
+  // In Vercel serverless (read-only filesystem), copy DB to /tmp for write access
+  if (process.env.VERCEL && dbFilePath && !dbFilePath.startsWith('/tmp')) {
+    const tmpPath = path.join('/tmp', path.basename(dbFilePath));
+    try {
+      // Copy only if not already there (cold start) or source is newer
+      const srcStat = fs.existsSync(dbFilePath) ? fs.statSync(dbFilePath) : null;
+      const tmpStat = fs.existsSync(tmpPath) ? fs.statSync(tmpPath) : null;
+      if (srcStat && (!tmpStat || srcStat.mtimeMs > tmpStat.mtimeMs)) {
+        fs.copyFileSync(dbFilePath, tmpPath);
+      }
+      effectivePath = tmpPath;
+    } catch (err) {
+      console.warn(`DB copy to /tmp failed: ${err.message}, trying original path`);
+    }
+  }
+
+  fs.mkdirSync(path.dirname(effectivePath), { recursive: true });
+  const db = new DatabaseSync(effectivePath);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA synchronous = NORMAL;');
   db.exec('PRAGMA foreign_keys = ON;');
