@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const MAX_YEARS = 10;
+  const MAX_YEARS = 5;
   const DEFAULT_YEARS = 5;
   const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'AI', 'Arts', 'Lifestyle', 'Opinion'];
   const SECTION_ALL = 'All';
@@ -32,9 +32,6 @@
     }
   }
 
-  let ws = null;
-  let wsReady = null;
-  let socketRequestId = 0;
   const inflightArticles = new Map();
   const prefetchedArticles = new Set();
   let topLoadingTicker = null;
@@ -44,10 +41,7 @@
     edition: (years, day) => `/api/edition?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
     articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
     articleRender: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    ws: () => {
-      const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return `${scheme}//${location.host}/ws`;
-    }
+    // WebSocket removed — all rendering via HTTP polling
   };
 
   init();
@@ -236,12 +230,11 @@
     }
     select.dataset.futurenewsBound = '1';
 
-    for (let i = 0; i <= MAX_YEARS; i++) {
-      const option = document.createElement('option');
-      option.value = String(i);
-      option.textContent = `+${i} years`;
-      select.appendChild(option);
-    }
+    // Only +5y edition for now
+    const option = document.createElement('option');
+    option.value = '5';
+    option.textContent = '+5 years';
+    select.appendChild(option);
 
     select.value = String(years);
     setEditionBadge(years);
@@ -730,6 +723,18 @@
         badge.appendChild(badgeSection);
         badge.appendChild(badgeEdition);
 
+        // Confidence indicator
+        const conf = Number(article.confidence) || 0;
+        if (conf > 0) {
+          const confBadge = document.createElement('span');
+          confBadge.style.cssText = 'margin-left:auto;font-size:0.7em;padding:1px 6px;border-radius:3px;';
+          const color = conf >= 80 ? '#2d7d46' : conf >= 60 ? '#b8860b' : '#c0392b';
+          confBadge.style.color = color;
+          confBadge.style.border = `1px solid ${color}`;
+          confBadge.textContent = `${conf}%`;
+          badge.appendChild(confBadge);
+        }
+
         const titleEl = document.createElement('h3');
         titleEl.textContent = article.title || 'Untitled';
 
@@ -950,16 +955,12 @@
         return statusPayload.article;
       }
 
+      // Trigger server-side rendering (Sonnet API)
       await fetchJSON(api.articleRender(articleId, clampedYears, normalizeDay(day) || normalizedDay), { method: 'POST' });
-      setProgress('Connecting to live renderer…', 12);
+      setProgress('Generating article with Sonnet...', 20);
 
-      let renderedArticle;
-      try {
-        renderedArticle = await renderArticleOverSocket(articleId, clampedYears, articleSeed, setProgress);
-      } catch (error) {
-        const fallbackArticle = await pollRenderedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, setProgress);
-        renderedArticle = fallbackArticle;
-      }
+      // Poll for the rendered article
+      const renderedArticle = await pollRenderedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, setProgress);
       setCachedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, renderedArticle);
       renderArticlePayload(renderedArticle, { cached: false });
       if (renderCard) {
@@ -1058,126 +1059,7 @@
     }
   }
 
-  async function renderArticleOverSocket(articleId, years, articleSeed, onProgress) {
-    const socket = await getSocket();
-    const requestId = `req-${Date.now()}-${++socketRequestId}`;
-    const streamState = articleSeed ? articleSeedToArticle(articleSeed, years) : { id: articleId, body: '' };
-    let resolved = false;
-    let rejectTimer;
-
-    const livePayload = await new Promise((resolve, reject) => {
-      const handleMessage = (event) => {
-        let payload;
-        try {
-          payload = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-
-        if (payload.requestId && payload.requestId !== requestId) {
-          return;
-        }
-
-        switch (payload.type) {
-          case 'render.progress': {
-            onProgress(payload.phase || 'Rendering…', payload.percent || 0);
-            break;
-          }
-          case 'render.chunk': {
-            streamState.body = `${streamState.body || ''}${String(payload.delta || '')}`;
-            renderArticlePayload(streamState, { cached: false, partial: true });
-            const current = Number.parseFloat(topLoadingBarFill?.style.width || '0') || 0;
-            const next = Math.min(96, current + 1.5);
-            setTopLoadPercent(next);
-            break;
-          }
-          case 'render.complete':
-          case 'render.article': {
-            const article = payload.article || streamState;
-            const finalArticle = { ...streamState, ...article };
-            finalArticle.body = finalArticle.body || streamState.body || '';
-            resolved = true;
-            cleanup();
-            resolve(finalArticle);
-            break;
-          }
-          case 'render.error': {
-            resolved = true;
-            cleanup();
-            reject(new Error(payload.error || 'Failed to render article'));
-            break;
-          }
-          default:
-            break;
-        }
-      };
-
-      const cleanup = () => {
-        socket.removeEventListener('message', handleMessage);
-        if (rejectTimer) clearTimeout(rejectTimer);
-      };
-
-      socket.addEventListener('message', handleMessage);
-      socket.send(
-        JSON.stringify({
-          type: 'render.article',
-          requestId,
-          articleId,
-          years,
-          day: getDayFromQuery()
-        })
-      );
-
-      rejectTimer = setTimeout(() => {
-        if (resolved) return;
-        cleanup();
-        reject(new Error('Article render timed out'));
-      }, 45000);
-    });
-
-    return livePayload;
-  }
-
-  function getSocket() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      return Promise.resolve(ws);
-    }
-    if (ws && ws.readyState === WebSocket.CONNECTING && wsReady) {
-      return wsReady;
-    }
-
-    ws = new WebSocket(api.ws());
-    wsReady = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('WebSocket open timed out'));
-      }, 7000);
-
-      ws.addEventListener(
-        'open',
-        () => {
-          clearTimeout(timer);
-          resolve(ws);
-        },
-        { once: true }
-      );
-      ws.addEventListener(
-        'error',
-        (event) => {
-          clearTimeout(timer);
-          reject(new Error(`WebSocket failed`));
-        },
-        { once: true }
-      );
-      ws.addEventListener(
-        'close',
-        () => {
-          clearTimeout(timer);
-          ws = null;
-        }
-      );
-    });
-    return wsReady;
-  }
+  // WebSocket rendering removed — all article rendering is HTTP-based
 
   function setEditionTagFromPayload(payload) {
     const tag = document.getElementById('editionTag');
@@ -1202,15 +1084,35 @@
 
     setTextElement(section, article.section || '—');
     setTextElement(title, article.title || '—');
-    setTextElement(dek, article.dek || '—');
+    setTextElement(dek, article.dek || '');
     setTextElement(meta, article.meta || '—');
 
-    if (hero) {
-      hero.src = article.image || 'assets/img/humanoids-labor-market.svg';
-      hero.alt = article.title || 'Article hero';
+    // Confidence badge
+    const confidenceEl = document.getElementById('aConfidence');
+    if (confidenceEl) {
+      const conf = Number(article.confidence) || 0;
+      if (conf > 0) {
+        const color = conf >= 80 ? '#2d7d46' : conf >= 60 ? '#b8860b' : '#c0392b';
+        confidenceEl.textContent = `${conf}% confidence`;
+        confidenceEl.style.color = color;
+        confidenceEl.style.borderColor = color;
+        confidenceEl.style.border = `1px solid ${color}`;
+      } else {
+        confidenceEl.textContent = '';
+      }
     }
 
-    setTextElement(prompt, article.prompt || '—');
+    if (hero) {
+      if (article.image) {
+        hero.src = article.image;
+        hero.alt = article.title || 'Article hero';
+        hero.style.display = '';
+      } else {
+        hero.style.display = 'none';
+      }
+    }
+
+    if (prompt) setTextElement(prompt, article.prompt || '');
 
     if (options.partial) {
       if (status) status.textContent = 'Streaming live content…';
@@ -1226,8 +1128,7 @@
       if (progress) progress.style.width = '100%';
     }
 
-    renderSignalRows('signals', article.signals || []);
-    renderMarketRows('marketSnap', article.markets || []);
+    // Origin signals/markets hidden from user view (kept internally)
     if (md) {
       md.innerHTML = markdownToHtml(article.body || '');
     }

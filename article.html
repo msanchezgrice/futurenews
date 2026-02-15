@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>The Future Times — Article (Mockup)</title>
+  <title>The Future Times — Article</title>
   <link rel="stylesheet" href="assets/styles.css"/>
 </head>
 <body>
@@ -20,8 +20,8 @@
       <div class="controls">
         <a class="btn" id="frontPageLink" href="index.html">← Front Page</a>
         <div class="pill"><span>Edition</span> <strong id="offsetYears">+5 years</strong></div>
-        <select id="editionYears" class="editionSelect" aria-label="Select years in the future"></select>
-        <button class="btn" onclick="navigator.clipboard.writeText(location.href); alert('Link copied (in real app: add share sheet)')">Share</button>
+        <select id="editionYears" class="editionSelect" aria-label="Select edition" style="display:none"></select>
+        <button class="btn" onclick="navigator.clipboard.writeText(location.href); alert('Link copied')">Share</button>
       </div>
     </div>
 
@@ -29,13 +29,16 @@
         <div class="card article">
         <img id="aHero" class="heroImg" src="" alt="Hero"/>
         <div class="aBody">
-          <div class="badge"><span class="spark">✦</span><strong id="aSection">—</strong><span style="color:var(--muted)">Edition</span></div>
+          <div class="badge">
+            <span class="spark">✦</span><strong id="aSection">—</strong>
+            <span id="aConfidence" style="margin-left:auto;font-size:0.75em;padding:2px 8px;border-radius:4px;background:var(--bg-alt,#f0f0f0);color:var(--muted)"></span>
+          </div>
           <h1 id="aTitle" class="aTitle">—</h1>
           <p id="aDek" class="aDek">—</p>
           <div id="aMeta" class="aMeta">—</div>
           <div class="renderStatus" id="renderStatus">
             <div>
-              <div id="renderStatusText">Initializing live renderer…</div>
+              <div id="renderStatusText">Generating article...</div>
               <div class="small" id="renderProgressText"></div>
             </div>
             <div class="renderBarWrap">
@@ -44,15 +47,14 @@
           </div>
           <hr class="soft"/>
           <div id="md" class="md"></div>
-          <hr class="soft"/>
-          <div class="small"><strong>Image prompt (for Pro3 Nano Banana Pro):</strong> <span id="prompt"></span></div>
-          <div class="small" style="margin-top:10px">
-            <a id="daySignalLink" href="/api/day-signal?format=html" target="_blank" rel="noopener">View this edition’s signal pack (inputs + evidence)</a>
-          </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Hidden elements for internal use -->
+  <span id="prompt" style="display:none"></span>
+  <a id="daySignalLink" href="#" style="display:none"></a>
 
 <script src="assets/app.js"></script>
 </body>

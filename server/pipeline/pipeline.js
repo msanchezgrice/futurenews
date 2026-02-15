@@ -779,6 +779,7 @@ export class FutureTimesPipeline {
         ...a,
         title: curatedTitle || a.title,
         dek: curatedDek || a.dek,
+        confidence: Number(c.plan.confidence) || 0,
         curation: {
           key: Boolean(c.key) || Boolean(c.plan.key),
           hero: Boolean(c.plan.hero),
@@ -789,6 +790,7 @@ export class FutureTimesPipeline {
           topicTitle: c.plan.topicTitle || c.plan.topicSeed || '',
           sparkDirections: c.plan.sparkDirections || '',
           futureEventSeed: c.plan.futureEventSeed || '',
+          confidence: Number(c.plan.confidence) || 0,
           outline: Array.isArray(c.plan.outline) ? c.plan.outline.slice(0, 10) : [],
           draftArticle: c.plan.draftArticle || null
         }
@@ -1513,7 +1515,8 @@ export class FutureTimesPipeline {
       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);
     `);
 
-    for (let yearsForward = 0; yearsForward <= 10; yearsForward++) {
+    // Only build +5y edition
+    for (const yearsForward of [5]) {
       const mix = chooseHorizonMix(yearsForward);
       const editionDate = formatEditionDate(day, yearsForward);
       const version = sha256Hex(`${day}|${yearsForward}|v1`).slice(0, 12);
@@ -2030,7 +2033,8 @@ export class FutureTimesPipeline {
       const editionPrompts = {};
       const editionPlans = {};
 
-      for (let yearsForward = 0; yearsForward <= 10; yearsForward++) {
+      // Only curate +5y edition
+      for (const yearsForward of [5]) {
         const edition = this.getEdition(normalized, yearsForward, { applyCuration: false });
         if (!edition) continue;
         const editionDate = String(edition.date || formatEditionDate(normalized, yearsForward));
@@ -2121,6 +2125,7 @@ export class FutureTimesPipeline {
               ? entry.extrapolationTrace.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean)
               : [],
             rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : [],
+            confidence: Number.isFinite(Number(entry.confidence)) ? Math.max(0, Math.min(100, Math.round(Number(entry.confidence)))) : 0,
             draftArticle: entry.draftArticle && typeof entry.draftArticle === 'object' ? {
               title: String(entry.draftArticle.title || '').trim(),
               dek: String(entry.draftArticle.dek || '').trim(),
@@ -2416,6 +2421,7 @@ export class FutureTimesPipeline {
           ? entry.extrapolationTrace.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean)
           : [],
         rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : [],
+        confidence: Number.isFinite(Number(entry.confidence)) ? Math.max(0, Math.min(100, Math.round(Number(entry.confidence)))) : 0,
         draftArticle: entry.draftArticle && typeof entry.draftArticle === 'object' ? {
           title: String(entry.draftArticle.title || '').trim(),
           dek: String(entry.draftArticle.dek || '').trim(),

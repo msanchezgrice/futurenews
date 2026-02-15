@@ -28,7 +28,7 @@ export function getOpusCurationConfigFromEnv() {
   const model = String(process.env.OPUS_MODEL || stored.model || modelDefault).trim() || modelDefault;
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 1, 0, 7);
-  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 16000, 2000, 32000);
+  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 32000, 4000, 64000);
   const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 900000, 10000, 1200000);
   const apiKey = apiKeyEnv || apiKeyStored;
   const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
@@ -152,8 +152,9 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     ``,
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
-    `- For every story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" a fast model can use to write the article.`,
-    `- For key stories ONLY: also write a draftArticle with body (~4 paragraphs, NYT-style).`,
+    `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
+    `- For EVERY story: write a full draftArticle with body (~4-6 paragraphs, NYT-style narrative). No story should have draftArticle:null.`,
+    `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
     `- Output STRICT JSON only. No markdown code fences, no commentary before/after the JSON.`,
@@ -185,14 +186,14 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- Do not output question headlines.`,
     `- topicTitle should be a short stable tag (2-6 words) that captures the underlying DOMAIN/TREND (not the specific baseline event).`,
     `- futureEventSeed must be a single declarative sentence describing what happened in ${editionDate} (usable as the lede). It should read like real news from that date.`,
-    `- sparkDirections must tell Codex Spark WHAT HAPPENED in ${editionDate} — be specific: who did what, what number changed, what policy passed, what product launched. Spark will write the article from these directions.`,
+    `- sparkDirections must describe WHAT HAPPENED in ${editionDate} — be specific: who did what, what number changed, what policy passed, what product launched.`,
     `- For AI section stories: use the extrapolation axes to make specific, quantitative predictions. Mention speed/capability numbers, adoption percentages, cost figures where plausible.`,
-    `- For non-key (secondary) stories: it is OK to keep curatedDek very short; focus on topicTitle + sparkDirections so Codex Spark can draft on click.`,
-    `- For draftArticle.body: narrative paragraphs only (NYT-style), no section headings, written as real journalism from ${editionDate}. End with a short "Sources" list (4-8 links).`,
+    `- For draftArticle.body: narrative paragraphs only (NYT-style), no section headings, written as real journalism from ${editionDate}. Do NOT include a Sources section — that is handled separately. Do NOT reference or link to the original baseline news articles.`,
+    `- confidence: integer 0-100 rating the plausibility of this prediction.`,
     aiExtrapolationBlock,
     `JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":false,"hero":false,"futureEventSeed":"string","draftArticle":null}]}`,
-    `For key stories, set draftArticle to {"title":"string","dek":"string","body":"string"} with 4+ paragraphs. For non-key stories, set draftArticle to null.`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":false,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"}}]}`,
+    `EVERY story must have a draftArticle with title, dek, and body (4-6 paragraphs). No story should have draftArticle:null.`,
     ``,
     ``,
     `Story candidates (must use these storyIds exactly):`,
@@ -279,13 +280,21 @@ async function callAnthropicJson(prompt, config) {
 
   let lastErr = null;
   for (const model of modelsToTry) {
+    // Use extended thinking for capable models to get better curation
+    const supportsThinking = model.includes('sonnet') || model.includes('opus');
     const body = {
       model,
       max_tokens: config.maxTokens,
-      temperature: 0.4,
       system: String(config.systemPrompt || DEFAULT_OPUS_SYSTEM_PROMPT),
       messages: [{ role: 'user', content: prompt }]
     };
+    if (supportsThinking) {
+      // Extended thinking: budget up to 10k tokens for reasoning
+      body.thinking = { type: 'enabled', budget_tokens: 10000 };
+      // temperature must not be set when thinking is enabled
+    } else {
+      body.temperature = 0.4;
+    }
 
     try {
       const resp = await fetchJsonWithTimeout(
@@ -302,17 +311,25 @@ async function callAnthropicJson(prompt, config) {
         config.timeoutMs
       );
 
-      // Anthropic returns { content: [{type:'text', text:'...'}], ... }.
-      // Claude may return multiple content blocks; concatenate all text blocks.
+      // Anthropic returns { content: [{type:'thinking', thinking:'...'}, {type:'text', text:'...'}], ... }.
+      // Extract text blocks (skip thinking blocks which are reasoning traces).
       let text = '';
+      let thinkingTrace = '';
       if (Array.isArray(resp?.content)) {
         for (const block of resp.content) {
+          if (block && block.type === 'thinking' && block.thinking) {
+            thinkingTrace += String(block.thinking);
+          }
           if (block && block.type === 'text' && block.text) {
             text += String(block.text);
           }
         }
       }
       if (!text) text = '';
+      // Log thinking trace for debugging (stored separately)
+      if (thinkingTrace) {
+        console.log(`[curation] Thinking trace (${thinkingTrace.length} chars) for model=${model}`);
+      }
 
       // Strip markdown code fences if present
       const stripped = text
@@ -412,76 +429,7 @@ async function callOpenAiJson(prompt, config) {
   return parsed;
 }
 
-function mockCuration({ day, yearsForward, editionDate, candidates, keyCount }) {
-  const list = Array.isArray(candidates) ? candidates : [];
-  const hero = list.find((c) => c.rank === 1 && c.section === 'U.S.') || list[0] || null;
-  const keyStoryIds = hero && keyCount > 0 ? [hero.storyId] : [];
-
-  const baselineYear = String(day || '').slice(0, 4) || '2026';
-  const targetYear = Number(baselineYear) + (Number(yearsForward) || 0);
-
-  const stories = list.map((c) => {
-    const key = keyStoryIds.includes(c.storyId);
-    const topicLabel = String((c.topic && c.topic.label) || c.topicLabel || c.title || '').replace(/\s+/g, ' ').trim();
-    const shortTopic = topicLabel.length > 80 ? topicLabel.slice(0, 80).replace(/\s+\S*$/, '').trim() : topicLabel;
-    const futureEventSeed = `In ${targetYear}, the domain of ${shortTopic} has reached a new inflection point.`;
-    const outline = [
-      `What concretely happened in ${targetYear} around ${shortTopic}`,
-      'Key players, policies, or technologies involved',
-      'Measurable outcomes or consequences',
-      'What comes next'
-    ];
-    const extrapolationTrace = [
-      `Baseline signal (${baselineYear}): ${topicLabel.slice(0, 140)}`,
-      `Extrapolate: what plausibly happens to this domain over ${Math.max(1, Number(yearsForward) || 0)} years`,
-      `Write a specific news report from ${editionDate}`
-    ];
-    const rationale = [
-      'Topic has clear trajectory for extrapolation',
-      'Domain is important enough to matter in the target year'
-    ];
-    const sparkDirections = [
-      `You are a journalist in ${targetYear}. Write a news article published on ${editionDate}.`,
-      `Topic domain: ${shortTopic}.`,
-      `The baseline signals from ${day} are CONTEXT ONLY — do NOT write about them directly or as anniversaries.`,
-      `Write about a SPECIFIC plausible outcome in ${targetYear}: what policy passed, what technology shipped, what market shifted.`,
-      `Be concrete: use numbers, names, specific outcomes. No hedging, no "could" or "might".`
-    ].join(' ');
-    const mockTitle = c.curatedTitle || shortTopic;
-    const mockDek = c.curatedDek || `A ${targetYear} report on ${shortTopic.toLowerCase()}.`;
-    return {
-      storyId: c.storyId,
-      curatedTitle: mockTitle,
-      curatedDek: mockDek,
-      topicTitle: topicLabel,
-      sparkDirections,
-      key,
-      hero: hero ? c.storyId === hero.storyId : false,
-      futureEventSeed,
-      outline,
-      extrapolationTrace,
-      rationale,
-      draftArticle: null
-    };
-  });
-
-  return {
-    schema: 1,
-    day,
-    yearsForward,
-    editionDate,
-    generatedAt: isoNow(),
-    model: 'mock-curator',
-    editionThesis: `Edition for ${editionDate}. Opus curation was not available; stories use Spark rendering on click.`,
-    thinkingTrace: [
-      'Prioritized stories with the clearest baseline-to-outcome bridge',
-      'Chose a hero story that is broad, narrative, and easy to visualize',
-      'Kept secondary stories as directives to minimize prewriting volume'
-    ],
-    keyStoryIds,
-    stories
-  };
-}
+// No mock curation — all curation must go through LLM
 
 export async function generateEditionCurationPlan(input) {
   const config = input?.config || getOpusCurationConfigFromEnv();
@@ -507,13 +455,14 @@ export async function generateEditionCurationPlan(input) {
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
   if (mode === 'anthropic') {
     const parsed = await callAnthropicJson(prompt, config);
-    return parsed || mockCuration({ ...input, keyCount });
+    if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
+    return parsed;
   }
   if (mode === 'openai') {
     const parsed = await callOpenAiJson(prompt, config);
-    return parsed || mockCuration({ ...input, keyCount });
+    if (!parsed) throw new Error('OpenAI curation returned no parseable JSON — no fallback.');
+    return parsed;
   }
 
-  // Unknown mode: fall back safely.
-  return mockCuration({ ...input, keyCount });
+  throw new Error(`Unknown OPUS_MODE="${mode}" — no mock fallback available.`);
 }

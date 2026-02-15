@@ -21,14 +21,8 @@ const PORT_START = Number(process.env.PORT || 57965);
 const PORT_FALLBACK_STEP = Number(process.env.PORT_FALLBACK_STEP || 53);
 const PORT_MAX_TRIES = Number(process.env.PORT_MAX_TRIES || 48);
 
-const SPARK_MODE = (process.env.SPARK_MODE || 'mock').toLowerCase();
-const SPARK_WS_URL = process.env.SPARK_WS_URL || '';
-const SPARK_HTTP_URL = process.env.SPARK_HTTP_URL || '';
-const SPARK_AUTH_TOKEN = process.env.SPARK_AUTH_TOKEN || process.env.SPARK_TOKEN || '';
-const SPARK_AUTH_HEADER = process.env.SPARK_AUTH_HEADER || 'Authorization';
-const SPARK_AUTH_PREFIX = process.env.SPARK_AUTH_PREFIX || 'Bearer';
-const SPARK_REQUEST_TIMEOUT_MS = Number(process.env.SPARK_REQUEST_TIMEOUT_MS || 22000);
-// Mock renderer removed — articles are rendered by Anthropic Sonnet API or Codex Spark
+// Articles are rendered by Anthropic Sonnet API — no Spark/mock renderers
+const EDITION_YEARS = 5; // Only +5y edition for now
 
 const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 * 60);
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
@@ -223,11 +217,6 @@ function finalizeJobCleanup(job) {
   if (timer.unref) timer.unref();
 }
 
-function isSparkConfigured() {
-  if (SPARK_MODE === 'mock') return false;
-  return !!(SPARK_WS_URL || SPARK_HTTP_URL);
-}
-
 function describeYearsForward(yearsForward) {
   const y = Number(yearsForward) || 0;
   if (y === 0) return 'today';
@@ -344,23 +333,20 @@ function buildForecastBody(story) {
   }
 
   // No draft available — return empty. The real article will be rendered on click
-  // by calling the Anthropic API (Sonnet) with the sparkDirections.
+  // by calling the Anthropic API (Sonnet) with the curator directions.
   return '';
 }
 
 function buildSeedArticleFromStory(story) {
   const pack = story.evidencePack || {};
-  const citations = Array.isArray(pack.citations) ? pack.citations : [];
-  const signals = Array.isArray(pack.signals) ? pack.signals : [];
-  const markets = Array.isArray(pack.markets) ? pack.markets : [];
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
   const editionDate = pack.editionDate || '';
-  // Prefer curated title/dek — no fallback to generic strings
-  const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || '';
-  const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || '';
+  const title = curation?.curatedTitle || curation?.draftArticle?.title || '';
+  const dek = curation?.curatedDek || curation?.draftArticle?.dek || '';
   const meta = editionDate ? `${story.section} • ${editionDate}` : String(story.section || '').trim();
   const body = buildForecastBody(story);
+  const confidence = Number(curation?.confidence) || 0;
 
   return {
     id: story.storyId,
@@ -370,13 +356,9 @@ function buildSeedArticleFromStory(story) {
     meta,
     image: story.image || '',
     body,
-    signals,
-    markets,
+    confidence,
     prompt: title ? `Editorial photo illustration prompt: ${title}. Documentary realism. Dated ${editionDate}.` : '',
-    citations,
-    stats: { econ: pack.econ || {}, markets: pack.markets || [] },
     editionDate,
-    generatedFrom: `signals-pipeline / ${story.day}`,
     generatedAt: new Date().toISOString(),
     curationGeneratedAt: story?.curation?.generatedAt || null,
     yearsForward: story.yearsForward
@@ -391,20 +373,11 @@ async function runAnthropicRenderer(job, story, seedArticle) {
     throw new Error('ANTHROPIC_API_KEY not set — cannot render article');
   }
 
-  const sparkRequest = buildSparkRequest(seedArticle, story);
-  const userPrompt = [
-    sparkRequest.instructions,
-    '',
-    `Headline: ${seedArticle.title}`,
-    seedArticle.dek ? `Dek: ${seedArticle.dek}` : '',
-    '',
-    'Write the full article body (4-8 paragraphs, NYT-style narrative). End with a short Sources section (4-8 plausible citations).',
-    'Output ONLY the article body text as plain paragraphs. No JSON, no metadata, no markdown headers (#), no bullet lists. Write flowing prose like the New York Times.'
-  ].filter(Boolean).join('\n');
+  const userPrompt = buildArticlePrompt(seedArticle, story);
 
   broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
 
-  const model = process.env.SPARK_ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
+  const model = process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -525,7 +498,7 @@ function normalizeProviderEvent(rawEvent) {
   const errorType = event.type === 'error' || event.type === 'render.error' || event.error || event.err;
 
   if (errorType) {
-    const errorText = typeof event.error === 'string' ? event.error : event.message || event.err || 'Spark render failed';
+    const errorText = typeof event.error === 'string' ? event.error : event.message || event.err || 'Render failed';
     return { type: 'render.error', error: errorText };
   }
 
@@ -562,194 +535,48 @@ function normalizeProviderEvent(rawEvent) {
   return {};
 }
 
-function buildSparkRequest(seedArticle, story) {
+function buildArticlePrompt(seedArticle, story) {
   const editionDate = story.evidencePack?.editionDate || seedArticle.editionDate;
   const baselineDay = normalizeDay(story.day) || formatDay();
   const baselineYear = baselineDay.slice(0, 4) || '2026';
   const yearsForward = story.yearsForward;
   const targetYear = Number(baselineYear) + (Number.isFinite(Number(yearsForward)) ? Number(yearsForward) : 0);
   const timeAnchor = editionDate ? `${editionDate} (${targetYear || 'future'})` : `${targetYear || 'future'}`;
-  let instructions = [
-    `You are writing an article for The Future Times as if it is being published on ${timeAnchor}.`,
+
+  const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
+  const topicTitle = String(curation?.topicTitle || curation?.topicSeed || '').trim();
+  const directions = String(curation?.sparkDirections || '').trim();
+  const eventSeed = String(curation?.futureEventSeed || '').trim();
+
+  return [
+    `You are writing an article for The Future Times, published on ${timeAnchor}.`,
     `Write it as a REAL news report from ${targetYear}. You are a journalist in ${targetYear} reporting on events happening NOW.`,
     ``,
     `CRITICAL RULES:`,
     `- Write about what is HAPPENING in ${targetYear}, not about what happened in ${baselineYear}.`,
-    `- Do NOT frame articles as "anniversary" pieces or "looking back" at ${baselineYear} events.`,
-    `- Do NOT write "X years after [headline]" or "the legacy of [event]" framings.`,
-    `- The baseline citations from ${baselineYear} are BACKGROUND CONTEXT only — they inform your understanding of the topic but are NOT the story.`,
-    `- Write about PREDICTIONS and PLAUSIBLE OUTCOMES: what policies passed, what technologies shipped, what markets look like, what changed.`,
-    `- Be specific and concrete: use numbers, names of plausible organizations, specific policy outcomes, market figures.`,
-    `- Write as if you are a journalist who has never heard of the ${baselineYear} article — you are simply reporting the news of ${targetYear}.`,
+    `- Do NOT frame as "anniversary" or "looking back" pieces.`,
+    `- The baseline citations from ${baselineYear} are BACKGROUND CONTEXT only.`,
+    `- Write PREDICTIONS and PLAUSIBLE OUTCOMES: policies, technologies, markets, specific numbers.`,
+    `- Write as a journalist who has never heard of the ${baselineYear} article.`,
+    `- Do NOT reference or link to the original ${baselineYear} news stories in your article.`,
     ``,
-    `Prediction markets are idea inputs: use them to infer the most likely outcome, and report that outcome as the one that happened. Do not pose the story as a question.`,
     `Do not describe the article as a projection, simulation, or prompt output.`,
-    `Output narrative paragraphs (NYT-style) and end with a short "Sources" list (4-8 links). Avoid section headings.`
-  ].join('\n');
-
-  const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
-  if (curation) {
-    const topicTitle = String(curation.topicTitle || curation.topicSeed || '').trim();
-    const directions = String(curation.sparkDirections || '').trim();
-    const eventSeed = String(curation.futureEventSeed || '').trim();
-    const outline = Array.isArray(curation.outline) ? curation.outline.filter(Boolean).slice(0, 10) : [];
-    if (topicTitle || directions || eventSeed || outline.length) {
-      const curatorBlock = [
-        '',
-        'Curator plan (internal guidance; do not mention explicitly):',
-        topicTitle ? `- Topic: ${topicTitle}` : null,
-        directions ? `- Directions: ${directions}` : null,
-        eventSeed ? `- Future event seed: ${eventSeed}` : null,
-        outline.length ? `- Outline: ${outline.map((x) => String(x).trim()).filter(Boolean).join(' | ')}` : null
-      ]
-        .filter(Boolean)
-        .join('\n');
-      instructions = `${instructions}\n${curatorBlock}`.trim();
-    }
-  }
-
-  return {
-    type: 'render.article',
-    model: process.env.SPARK_MODEL || 'codex-spark',
-    yearsForward,
-    baselineDay,
-    editionDate,
-    section: story.section,
-    headlineSeed: story.headlineSeed,
-    dekSeed: story.dekSeed,
-    evidencePack: story.evidencePack || {},
-    instructions,
-    curation: curation || undefined,
-    constraints: {
-      grounding: 'baseline_citations',
-      // Baseline facts must be grounded in the evidence pack citations.
-      baselineFactsMustBeCited: true,
-      // Forecast narrative is allowed (invented future events), but must be consistent with the baseline signals.
-      allowForecastNarrative: true,
-      // Do not restate the baseline headline as the future story; write an original future-news article.
-      avoidCopyingBaselineHeadlines: true,
-      // Headlines should not be posed as questions.
-      noQuestionHeadlines: true,
-      // Prefer a readable article: narrative paragraphs and a short "Sources" list at the end.
-      requireCitationsInBody: false,
-      includeCondensedSourcesSection: true,
-      avoidSectionHeadings: true,
-      avoidMetaForecastLanguage: true,
-      presentTenseInTargetYear: true,
-      marketsAsInputsWriteLikelyOutcome: true
-    },
-    article: seedArticle
-  };
+    `Output 4-8 narrative paragraphs (NYT-style prose, no markdown headers, no bullet lists).`,
+    `Do NOT include a Sources section — sources are handled separately.`,
+    ``,
+    topicTitle ? `Topic: ${topicTitle}` : '',
+    directions ? `Curator directions: ${directions}` : '',
+    eventSeed ? `Future event seed: ${eventSeed}` : '',
+    ``,
+    `Headline: ${seedArticle.title}`,
+    seedArticle.dek ? `Dek: ${seedArticle.dek}` : '',
+    ``,
+    `Write the full article body now.`
+  ].filter(Boolean).join('\n');
 }
 
-async function runCodexSocketRenderer(job, story, seedArticle) {
-  const requestBody = buildSparkRequest(seedArticle, story);
-  const headers = {};
-  if (SPARK_AUTH_TOKEN) {
-    headers[SPARK_AUTH_HEADER] = `${SPARK_AUTH_PREFIX} ${SPARK_AUTH_TOKEN}`;
-  }
-
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    let settled = false;
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      socket.terminate();
-      reject(new Error('Spark provider timeout'));
-    }, SPARK_REQUEST_TIMEOUT_MS);
-
-    const socket = new WebSocket(SPARK_WS_URL, { headers });
-
-    socket.on('open', () => {
-      broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Connected to Codex Spark', percent: 10 });
-      socket.send(JSON.stringify(requestBody));
-    });
-
-    socket.on('message', (raw) => {
-      if (settled) return;
-      const frames = parseProviderFrame(raw.toString());
-      for (const frame of frames) {
-        const normalized = normalizeProviderEvent(frame);
-        if (!normalized.type && !normalized.delta && !normalized.article) continue;
-
-        if (normalized.type === 'render.progress') {
-          broadcastToJobSubscribers(job, { type: 'render.progress', phase: normalized.phase || 'Rendering', percent: normalized.percent });
-          continue;
-        }
-
-        if (normalized.type === 'render.chunk' && normalized.delta) {
-          broadcastToJobSubscribers(job, { type: 'render.chunk', delta: normalized.delta });
-          seedArticle.body = `${seedArticle.body || ''}${String(normalized.delta)}`;
-          continue;
-        }
-
-        if (normalized.type === 'render.article' && normalized.article) {
-          resolved = true;
-          const a = normalized.article;
-          seedArticle.title = a.title || seedArticle.title;
-          seedArticle.dek = a.dek || seedArticle.dek;
-          seedArticle.body = a.body || seedArticle.body || '';
-          seedArticle.signals = a.signals || seedArticle.signals;
-          seedArticle.markets = a.markets || seedArticle.markets;
-          seedArticle.prompt = a.prompt || seedArticle.prompt;
-          seedArticle.citations = a.citations || seedArticle.citations;
-        }
-
-        if (normalized.type === 'render.complete' || normalized.type === 'render.article') {
-          settled = true;
-          clearTimeout(timeout);
-          socket.close();
-          job.complete = true;
-          job.status = 'complete';
-          job.result = seedArticle;
-          cacheByKey.set(job.key, seedArticle);
-          pipeline.storeRendered(job.storyId, seedArticle, { curationGeneratedAt: job.curationGeneratedAt });
-          broadcastToJobSubscribers(job, { type: 'render.complete', article: seedArticle });
-          finalizeJobCleanup(job);
-          resolve(seedArticle);
-          return;
-        }
-
-        if (normalized.type === 'render.error') {
-          settled = true;
-          clearTimeout(timeout);
-          socket.close();
-          reject(new Error(normalized.error || 'Spark render failed'));
-          return;
-        }
-      }
-    });
-
-    socket.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      reject(err);
-    });
-
-    socket.on('close', () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (resolved) {
-        job.complete = true;
-        job.status = 'complete';
-        job.result = seedArticle;
-        cacheByKey.set(job.key, seedArticle);
-        pipeline.storeRendered(job.storyId, seedArticle, { curationGeneratedAt: job.curationGeneratedAt });
-        broadcastToJobSubscribers(job, { type: 'render.complete', article: seedArticle });
-        finalizeJobCleanup(job);
-        resolve(seedArticle);
-        return;
-      }
-      reject(new Error('Spark provider closed connection'));
-    });
-  });
-}
-
-async function runSparkRender(job, story, seedArticle) {
-  // If the article already has a full body from Opus draft, just finalize
+async function renderArticleContent(job, story, seedArticle) {
+  // If there's already a full body (from Opus draftArticle), just finalize
   if (seedArticle.body && seedArticle.body.trim().length > 200) {
     job.complete = true;
     job.status = 'complete';
@@ -761,19 +588,7 @@ async function runSparkRender(job, story, seedArticle) {
     return;
   }
 
-  // Try Codex Spark WebSocket first if configured
-  if ((SPARK_WS_URL || SPARK_HTTP_URL) && SPARK_MODE !== 'mock') {
-    try {
-      if (SPARK_WS_URL) {
-        await runCodexSocketRenderer(job, story, seedArticle);
-        return;
-      }
-    } catch (error) {
-      broadcastToJobSubscribers(job, { type: 'render.progress', phase: `Spark unavailable, using Sonnet...`, percent: 12 });
-    }
-  }
-
-  // Use Anthropic API (Sonnet) to generate the article
+  // Use Anthropic Sonnet API to generate the article
   await runAnthropicRenderer(job, story, seedArticle);
 }
 
@@ -794,7 +609,7 @@ async function runRenderJob(job) {
   }
 
   const seedArticle = buildSeedArticleFromStory(story);
-  await runSparkRender(job, story, seedArticle);
+  await renderArticleContent(job, story, seedArticle);
 }
 
 function getActiveJob(key) {
@@ -1744,12 +1559,13 @@ function renderAdminCurationHtml({ day, yearsForward, snapshot, trace, dayCurati
       const draftBody = draft ? String(draft.body || '').trim() : '';
 
       const articleHref = `/article.html?id=${encodeURIComponent(String(s.storyId || ''))}&years=${encodeURIComponent(String(y))}&day=${encodeURIComponent(dayLabel)}`;
-      const sparkHref = `/api/admin/spark-request?id=${encodeURIComponent(String(s.storyId || ''))}`;
+      const confidence = Number(p.confidence) || 0;
 
       const badges = [
         key ? `<span class="badge">key</span>` : '',
         isHero ? `<span class="badge hero">hero</span>` : '',
-        topicTitle ? `<span class="badge">${escapeHtml(topicTitle)}</span>` : ''
+        topicTitle ? `<span class="badge">${escapeHtml(topicTitle)}</span>` : '',
+        confidence ? `<span class="badge" style="border-color:${confidence >= 80 ? '#2d7d46' : confidence >= 60 ? '#b8860b' : '#c0392b'};color:${confidence >= 80 ? '#2d7d46' : confidence >= 60 ? '#b8860b' : '#c0392b'}">${confidence}% conf</span>` : ''
       ]
         .filter(Boolean)
         .join(' ');
@@ -1764,14 +1580,13 @@ function renderAdminCurationHtml({ day, yearsForward, snapshot, trace, dayCurati
           ${dek ? `<div class="dek">${escapeHtml(dek)}</div>` : `<div class="muted">No curated dek.</div>`}
           <div class="row">
             <a class="pill" href="${escapeHtml(articleHref)}" target="_blank" rel="noopener">Open article</a>
-            <a class="pill" href="${escapeHtml(sparkHref)}" target="_blank" rel="noopener">Spark request (JSON)</a>
             <span class="muted mono">storyId ${escapeHtml(String(s.storyId || ''))}</span>
           </div>
           <div class="grid2">
             <div>
               <h4>Future event seed</h4>
               <div class="monoBox">${eventSeed ? escapeHtml(eventSeed) : '<span class="muted">—</span>'}</div>
-              <h4>Codex Spark directions</h4>
+              <h4>Curator directions</h4>
               <div class="monoBox">${dirs ? escapeHtml(dirs) : '<span class="muted">—</span>'}</div>
             </div>
             <div>
@@ -2014,11 +1829,8 @@ async function requestHandler(req, res) {
       const curatorConfig = getOpusCurationConfigFromEnv();
       sendJson(res, {
         provider: {
-          mode: SPARK_MODE,
-          configured: isSparkConfigured(),
-          wsUrl: SPARK_WS_URL || null,
-          httpUrl: SPARK_HTTP_URL || null,
-          fallbackToMock: SPARK_FALLBACK_TO_MOCK
+          mode: 'anthropic',
+          articleModel: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),
@@ -2224,6 +2036,13 @@ async function requestHandler(req, res) {
       const builtDay = await pipeline.ensureDayBuilt(requestedDay);
       const forceRefresh = String(url.searchParams.get('forceRefresh') || '').toLowerCase() === 'true';
       const forceCuration = String(url.searchParams.get('forceCuration') || '').toLowerCase() === 'true';
+      // Clear ALL caches on rebuild to ensure fresh content
+      if (forceCuration || forceRefresh) {
+        pipeline.db.exec('DELETE FROM render_cache;');
+        pipeline.db.exec('DELETE FROM story_curations;');
+        pipeline.db.exec('DELETE FROM day_curations;');
+        cacheByKey.clear();
+      }
       await pipeline.refresh({ day: builtDay, force: forceRefresh });
       const result = await pipeline.curateDay(builtDay, { force: forceCuration });
       sendJson(res, { ok: true, day: builtDay, refreshed: true, curated: result });
@@ -2243,33 +2062,6 @@ async function requestHandler(req, res) {
         return;
       }
       sendJson(res, { ok: true, day: builtDay, events });
-      return;
-    }
-
-    if (pathname === '/api/admin/spark-request') {
-      if (req.method !== 'GET') return send405(res, 'GET');
-      const storyId = String(url.searchParams.get('id') || url.searchParams.get('storyId') || '').trim();
-      if (!storyId) {
-        sendJson(res, { ok: false, error: 'missing_story_id' }, 400);
-        return;
-      }
-
-      let story = pipeline.getStory(storyId);
-      if (!story) {
-        const match = String(storyId).match(/^ft-(\d{4}-\d{2}-\d{2})-y(\d+)/);
-        if (match) {
-          await pipeline.ensureDayBuilt(match[1]);
-          story = pipeline.getStory(storyId);
-        }
-      }
-      if (!story) {
-        sendJson(res, { ok: false, error: 'story_not_found', storyId }, 404);
-        return;
-      }
-
-      const seedArticle = buildSeedArticleFromStory(story);
-      const requestBody = buildSparkRequest(seedArticle, story);
-      sendJson(res, { ok: true, storyId, request: requestBody });
       return;
     }
 
@@ -2444,7 +2236,7 @@ async function requestHandler(req, res) {
 
   <div class="card">
     <strong>Apply a custom prompt for +${escapeHtml(String(yearsForward))}y</strong>
-    <div class="muted">Edit the prompt, then click Apply. This updates story curations and future Spark renders.</div>
+    <div class="muted">Edit the prompt, then click Apply. This updates story curations for the edition.</div>
     <div class="muted" style="margin-top:8px">System prompt (provider-level):</div>
     <textarea id="systemPromptBox" style="min-height:110px" placeholder="Loading system prompt..."></textarea>
     <div class="muted" style="margin-top:8px">Anthropic model:</div>
@@ -2925,7 +2717,7 @@ async function start() {
     }).catch(() => {});
 
     if (activePort === candidatePort) {
-      console.log(`Future Times Spark service running on http://${DEFAULT_HOST}:${activePort}`);
+      console.log(`Future Times running on http://${DEFAULT_HOST}:${activePort}`);
       console.log(`WebSocket endpoint: ws://${DEFAULT_HOST}:${activePort}/ws`);
       return;
     }
