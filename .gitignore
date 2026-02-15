@@ -12,3 +12,4 @@ node_modules/
 data/*.sqlite-shm
 data/*.sqlite-wal
 data/*.sqlite-journal
+.vercel
