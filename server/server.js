@@ -10,7 +10,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { FutureTimesPipeline } from './pipeline/pipeline.js';
 import { clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
-import { getRuntimeConfigInfo, readRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
+import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -28,7 +28,7 @@ const SPARK_AUTH_TOKEN = process.env.SPARK_AUTH_TOKEN || process.env.SPARK_TOKEN
 const SPARK_AUTH_HEADER = process.env.SPARK_AUTH_HEADER || 'Authorization';
 const SPARK_AUTH_PREFIX = process.env.SPARK_AUTH_PREFIX || 'Bearer';
 const SPARK_REQUEST_TIMEOUT_MS = Number(process.env.SPARK_REQUEST_TIMEOUT_MS || 22000);
-const SPARK_FALLBACK_TO_MOCK = process.env.SPARK_FALLBACK_TO_MOCK !== 'false';
+// Mock renderer removed — articles are rendered by Anthropic Sonnet API or Codex Spark
 
 const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 * 60);
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
@@ -335,97 +335,17 @@ function ordinal(n) {
 }
 
 function buildForecastBody(story) {
-  const pack = story.evidencePack || {};
-  const topic = pack.topic || {};
-  const citations = Array.isArray(pack.citations) ? pack.citations : [];
-  const markets = Array.isArray(pack.markets) ? pack.markets : [];
-  const econ = pack.econ && typeof pack.econ === 'object' ? pack.econ : {};
-  const yearsForward = Number.isFinite(Number(pack.yearsForward))
-    ? Number(pack.yearsForward)
-    : Number.isFinite(Number(story.yearsForward))
-      ? Number(story.yearsForward)
-      : 0;
-  const baselineDay = normalizeDay(story.day) || formatDay();
-  const baselineYear = baselineDay.slice(0, 4) || '2026';
-  const editionDate = pack.editionDate || 'the target date';
-  const seed = story.storyId || `${story.section}|${story.angle || ''}|${story.rank || ''}|${editionDate}`;
-  const angle = String(story.angle || 'impact');
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
-  const futureEventSeedRaw = String(curation?.futureEventSeed || '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
-  // ── SHORT-CIRCUIT: If Opus curated a full draft, use it directly ──
+  // If Opus/Sonnet curated a full draft article, use it directly
   const draftBody = curation?.draftArticle?.body || curation?.draftBody || '';
   if (draftBody && draftBody.length > 120) {
     return draftBody;
   }
 
-  // ── SHORT-CIRCUIT: If Opus provided sparkDirections + futureEventSeed, build a
-  //    short holding article from the real topic instead of generic templates. ──
-  const sparkDirections = String(curation?.sparkDirections || '').trim();
-  if (futureEventSeedRaw && sparkDirections && futureEventSeedRaw.length > 20) {
-    const topicLabel = String(topic.label || story.topicLabel || '').replace(/\s+/g, ' ').trim();
-    const targetYear = Number(baselineYear) + yearsForward;
-    const sourceLines = citations.slice(0, 5).map((c) => {
-      const url = String(c.url || '').trim();
-      const title = String(c.title || '').replace(/\s+/g, ' ').trim();
-      return url ? `${title} — ${url}` : title;
-    }).filter(Boolean);
-
-    const lines = [];
-    lines.push(futureEventSeedRaw.endsWith('.') ? futureEventSeedRaw : `${futureEventSeedRaw}.`);
-    lines.push('');
-    if (sparkDirections) {
-      lines.push(sparkDirections);
-      lines.push('');
-    }
-    // No placeholder text - the spark directions + event seed ARE the article body until Spark renders
-    if (sourceLines.length) {
-      lines.push('');
-      lines.push('Sources');
-      lines.push('');
-      lines.push(sourceLines.join('\n'));
-    }
-    return lines.join('\n');
-  }
-
-  // ── MINIMAL FALLBACK: no Opus draft and no sparkDirections ──
-  // Just show sources. Codex Spark will write the real article on click.
-  const targetYear = Number(baselineYear) + yearsForward;
-  const fallbackLines = [];
-
-  if (futureEventSeedRaw) {
-    fallbackLines.push(futureEventSeedRaw.endsWith('.') ? futureEventSeedRaw : `${futureEventSeedRaw}.`);
-    fallbackLines.push('');
-  }
-
-  // Add source links as clickable references
-  const fallbackSourceLines = [];
-  const usedFallbackUrls = new Set();
-  for (const c of citations.slice(0, 6)) {
-    const cleanUrl = String(c.url || '').trim();
-    if (!cleanUrl || usedFallbackUrls.has(cleanUrl)) continue;
-    usedFallbackUrls.add(cleanUrl);
-    const cleanTitle = stripAuthorSuffix(String(c.title || '')).replace(/\s+/g, ' ').trim();
-    fallbackSourceLines.push(`- ${cleanTitle || cleanUrl} — ${cleanUrl}`.trim());
-  }
-  for (const m of markets.slice(0, 2)) {
-    const label = String(m.label || '').replace(/\?+$/g, '').trim();
-    const mUrl = String(m.url || '').trim();
-    if (mUrl && !usedFallbackUrls.has(mUrl)) {
-      usedFallbackUrls.add(mUrl);
-      fallbackSourceLines.push(`- ${label ? `Polymarket: ${label}` : 'Polymarket market'} — ${mUrl}`.trim());
-    }
-  }
-
-  if (fallbackSourceLines.length) {
-    fallbackLines.push('Sources');
-    fallbackLines.push('');
-    fallbackLines.push(fallbackSourceLines.join('\n'));
-  }
-
-  return fallbackLines.join('\n') || `Report from ${editionDate}.`;
+  // No draft available — return empty. The real article will be rendered on click
+  // by calling the Anthropic API (Sonnet) with the sparkDirections.
+  return '';
 }
 
 function buildSeedArticleFromStory(story) {
@@ -436,8 +356,8 @@ function buildSeedArticleFromStory(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
   const editionDate = pack.editionDate || '';
-  // Prefer Opus-curated title/dek over heuristic seeds
-  const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || 'Future Times story';
+  // Prefer curated title/dek — no fallback to generic strings
+  const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || '';
   const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || '';
   const meta = editionDate ? `${story.section} • ${editionDate}` : String(story.section || '').trim();
   const body = buildForecastBody(story);
@@ -448,11 +368,11 @@ function buildSeedArticleFromStory(story) {
     title,
     dek,
     meta,
-    image: story.image || 'assets/img/humanoids-labor-market.svg',
+    image: story.image || '',
     body,
     signals,
     markets,
-    prompt: `Editorial photo illustration prompt: ${title}. Documentary realism. Dated ${editionDate}.`,
+    prompt: title ? `Editorial photo illustration prompt: ${title}. Documentary realism. Dated ${editionDate}.` : '',
     citations,
     stats: { econ: pack.econ || {}, markets: pack.markets || [] },
     editionDate,
@@ -463,25 +383,94 @@ function buildSeedArticleFromStory(story) {
   };
 }
 
-async function runMockRenderer(job, seedArticle) {
+async function runAnthropicRenderer(job, story, seedArticle) {
   const rendered = { ...seedArticle };
-  const stages = [
-    { label: 'Evidence pack loaded', percent: 12 },
-    { label: 'Angle and structure', percent: 36 },
-    { label: 'Draft composed', percent: 68 },
-    { label: 'Citation pass', percent: 88 },
-    { label: 'Formatting complete', percent: 100 }
-  ];
-
-  for (const stage of stages) {
-    await sleep(randomDelay(140, 240));
-    broadcastToJobSubscribers(job, { type: 'render.progress', phase: stage.label, percent: stage.percent });
+  const opusCfg = readOpusRuntimeConfig() || {};
+  const apiKey = process.env.ANTHROPIC_API_KEY || opusCfg.apiKey || '';
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY not set — cannot render article');
   }
 
-  const chunks = splitToChunks(rendered.body.trim(), MAX_BODY_CHUNK_BYTES);
-  for (const chunk of chunks) {
-    await sleep(randomDelay(120, 220));
-    broadcastToJobSubscribers(job, { type: 'render.chunk', delta: `${chunk}\n\n` });
+  const sparkRequest = buildSparkRequest(seedArticle, story);
+  const userPrompt = [
+    sparkRequest.instructions,
+    '',
+    `Headline: ${seedArticle.title}`,
+    seedArticle.dek ? `Dek: ${seedArticle.dek}` : '',
+    '',
+    'Write the full article body (4-8 paragraphs, NYT-style narrative). End with a short Sources section (4-8 plausible citations).',
+    'Output ONLY the article body text as plain paragraphs. No JSON, no metadata, no markdown headers (#), no bullet lists. Write flowing prose like the New York Times.'
+  ].filter(Boolean).join('\n');
+
+  broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
+
+  const model = process.env.SPARK_ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        temperature: 0.6,
+        stream: true,
+        messages: [{ role: 'user', content: userPrompt }]
+      }),
+      signal: controller.signal
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      throw new Error(`Anthropic API ${resp.status}: ${errText.slice(0, 200)}`);
+    }
+
+    broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Writing article...', percent: 30 });
+
+    // Stream the response
+    let fullBody = '';
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE events
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+            const text = evt.delta.text || '';
+            fullBody += text;
+            broadcastToJobSubscribers(job, { type: 'render.chunk', delta: text });
+          }
+        } catch { /* skip non-JSON SSE lines */ }
+      }
+
+      // Update progress based on length
+      const pct = Math.min(90, 30 + Math.floor((fullBody.length / 3000) * 60));
+      broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Writing article...', percent: pct });
+    }
+
+    rendered.body = fullBody.trim() || rendered.body;
+    broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Article complete', percent: 100 });
+  } finally {
+    clearTimeout(timeout);
   }
 
   job.complete = true;
@@ -760,22 +749,32 @@ async function runCodexSocketRenderer(job, story, seedArticle) {
 }
 
 async function runSparkRender(job, story, seedArticle) {
+  // If the article already has a full body from Opus draft, just finalize
+  if (seedArticle.body && seedArticle.body.trim().length > 200) {
+    job.complete = true;
+    job.status = 'complete';
+    job.result = seedArticle;
+    cacheByKey.set(job.key, seedArticle);
+    pipeline.storeRendered(job.storyId, seedArticle, { curationGeneratedAt: job.curationGeneratedAt });
+    broadcastToJobSubscribers(job, { type: 'render.complete', article: seedArticle });
+    finalizeJobCleanup(job);
+    return;
+  }
+
+  // Try Codex Spark WebSocket first if configured
   if ((SPARK_WS_URL || SPARK_HTTP_URL) && SPARK_MODE !== 'mock') {
     try {
       if (SPARK_WS_URL) {
         await runCodexSocketRenderer(job, story, seedArticle);
         return;
       }
-      throw new Error('HTTP mode for Spark is not implemented yet');
     } catch (error) {
-      if (!SPARK_FALLBACK_TO_MOCK) throw error;
-      broadcastToJobSubscribers(job, { type: 'render.progress', phase: `Spark unavailable: ${error.message || 'fallback to mock'}`, percent: 16 });
-      await runMockRenderer(job, seedArticle);
-      return;
+      broadcastToJobSubscribers(job, { type: 'render.progress', phase: `Spark unavailable, using Sonnet...`, percent: 12 });
     }
   }
 
-  await runMockRenderer(job, seedArticle);
+  // Use Anthropic API (Sonnet) to generate the article
+  await runAnthropicRenderer(job, story, seedArticle);
 }
 
 async function runRenderJob(job) {

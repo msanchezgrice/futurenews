@@ -2120,7 +2120,12 @@ export class FutureTimesPipeline {
             extrapolationTrace: Array.isArray(entry.extrapolationTrace)
               ? entry.extrapolationTrace.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean)
               : [],
-            rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : []
+            rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : [],
+            draftArticle: entry.draftArticle && typeof entry.draftArticle === 'object' ? {
+              title: String(entry.draftArticle.title || '').trim(),
+              dek: String(entry.draftArticle.dek || '').trim(),
+              body: String(entry.draftArticle.body || '').trim()
+            } : null
           };
 
           let articleJson = null;
@@ -2410,7 +2415,12 @@ export class FutureTimesPipeline {
         extrapolationTrace: Array.isArray(entry.extrapolationTrace)
           ? entry.extrapolationTrace.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean)
           : [],
-        rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : []
+        rationale: Array.isArray(entry.rationale) ? entry.rationale.slice(0, 8).map((x) => String(x || '').trim()).filter(Boolean) : [],
+        draftArticle: entry.draftArticle && typeof entry.draftArticle === 'object' ? {
+          title: String(entry.draftArticle.title || '').trim(),
+          dek: String(entry.draftArticle.dek || '').trim(),
+          body: String(entry.draftArticle.body || '').trim()
+        } : null
       };
 
       upsert.run(
