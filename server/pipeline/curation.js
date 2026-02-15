@@ -29,7 +29,7 @@ export function getOpusCurationConfigFromEnv() {
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 1, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 16000, 2000, 32000);
-  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 600000, 10000, 900000);
+  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 900000, 10000, 1200000);
   const apiKey = apiKeyEnv || apiKeyStored;
   const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
   const systemPrompt =
@@ -90,8 +90,9 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       .map((s) => `- ${String(s.title || '').slice(0, 160)} (${String(s.source || '').slice(0, 40)})`)
       .join('\n');
 
-  // Keep candidate info concise to reduce prompt tokens
-  const candidateLines = (candidates || [])
+  // Cap candidates to top 20 to keep prompt and output manageable
+  const cappedCandidates = (candidates || []).slice(0, 20);
+  const candidateLines = cappedCandidates
     .map((c) => {
       const topic = c.topic || {};
       const pack = c.evidencePack || {};

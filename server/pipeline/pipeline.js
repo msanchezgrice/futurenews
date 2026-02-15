@@ -2344,9 +2344,14 @@ export class FutureTimesPipeline {
       config.systemPrompt = String(options.systemPrompt || '').trim() || config.systemPrompt;
     }
     const snapshot = this.buildCurationSnapshot(normalized);
-    const prompt = String(options.prompt || '').trim();
-    if (!prompt) throw new Error('prompt_required');
     const keyCount = Number.isFinite(Number(options.keyCount)) ? Number(options.keyCount) : config.keyStoriesPerEdition;
+    let prompt = String(options.prompt || '').trim();
+    if (!prompt) {
+      // Auto-generate the standard curation prompt if none provided
+      prompt = buildEditionCurationPrompt({
+        day: normalized, yearsForward: y, editionDate, candidates, keyCount, snapshot
+      });
+    }
 
     this.traceEvent(normalized, 'curate.edition.custom.start', { yearsForward: y, editionDate, keyCount, mode: config.mode, model: config.model });
     const plan = await generateEditionCurationPlan({
