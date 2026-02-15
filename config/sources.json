@@ -1,0 +1,185 @@
+{
+  "schema": 1,
+  "refresh_minutes": 60,
+  "sources": [
+    {
+      "source_id": "rss-us-npr",
+      "name": "NPR U.S.",
+      "type": "rss",
+      "section": "U.S.",
+      "url": "https://feeds.npr.org/1003/rss.xml",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-us-pbs",
+      "name": "PBS NewsHour Headlines",
+      "type": "rss",
+      "section": "U.S.",
+      "url": "https://www.pbs.org/newshour/feeds/rss/headlines",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-us-guardian",
+      "name": "The Guardian U.S.",
+      "type": "rss",
+      "section": "U.S.",
+      "url": "https://www.theguardian.com/us-news/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+
+    {
+      "source_id": "rss-world-bbc",
+      "name": "BBC World",
+      "type": "rss",
+      "section": "World",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-world-guardian",
+      "name": "The Guardian World",
+      "type": "rss",
+      "section": "World",
+      "url": "https://www.theguardian.com/world/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+
+    {
+      "source_id": "rss-business-guardian",
+      "name": "The Guardian Business",
+      "type": "rss",
+      "section": "Business",
+      "url": "https://www.theguardian.com/business/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+
+    {
+      "source_id": "rss-tech-ars",
+      "name": "Ars Technica",
+      "type": "rss",
+      "section": "Technology",
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+    {
+      "source_id": "rss-tech-guardian",
+      "name": "The Guardian Technology",
+      "type": "rss",
+      "section": "Technology",
+      "url": "https://www.theguardian.com/uk/technology/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 60
+    },
+
+    {
+      "source_id": "rss-arts-guardian",
+      "name": "The Guardian Culture",
+      "type": "rss",
+      "section": "Arts",
+      "url": "https://www.theguardian.com/culture/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+    {
+      "source_id": "rss-life-guardian",
+      "name": "The Guardian Life & Style",
+      "type": "rss",
+      "section": "Lifestyle",
+      "url": "https://www.theguardian.com/lifeandstyle/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+    {
+      "source_id": "rss-opinion-guardian",
+      "name": "The Guardian Opinion",
+      "type": "rss",
+      "section": "Opinion",
+      "url": "https://www.theguardian.com/commentisfree/rss",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+
+    {
+      "source_id": "rss-arxiv-cs-ai",
+      "name": "arXiv cs.AI",
+      "type": "rss",
+      "section": "Technology",
+      "url": "http://export.arxiv.org/rss/cs.AI",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "rss-arxiv-cs-ro",
+      "name": "arXiv cs.RO",
+      "type": "rss",
+      "section": "Technology",
+      "url": "http://export.arxiv.org/rss/cs.RO",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+
+    {
+      "source_id": "api-polymarket-gamma",
+      "name": "Polymarket Gamma Markets",
+      "type": "api_json",
+      "section": null,
+      "url": "https://gamma-api.polymarket.com/markets?active=true&closed=false&limit=200&order=volume&ascending=false",
+      "enabled": true,
+      "fetch_interval_minutes": 120
+    },
+
+    {
+      "source_id": "csv-fred-unrate",
+      "name": "FRED UNRATE",
+      "type": "csv",
+      "section": "Business",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=UNRATE",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "csv-fred-cpi",
+      "name": "FRED CPIAUCSL",
+      "type": "csv",
+      "section": "Business",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=CPIAUCSL",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "csv-fred-fedfunds",
+      "name": "FRED FEDFUNDS",
+      "type": "csv",
+      "section": "Business",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=FEDFUNDS",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "csv-fred-dgs10",
+      "name": "FRED DGS10",
+      "type": "csv",
+      "section": "Business",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    },
+    {
+      "source_id": "csv-fred-dgs2",
+      "name": "FRED DGS2",
+      "type": "csv",
+      "section": "Business",
+      "url": "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS2",
+      "enabled": true,
+      "fetch_interval_minutes": 240
+    }
+  ]
+}
+

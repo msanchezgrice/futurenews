@@ -1,0 +1,19 @@
+{
+  "name": "future-times-codex-spark",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Future newspaper mockup upgraded with real-time Codex Spark-style article rendering.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "refresh": "node server/refresh.js",
+    "worker": "node server/worker.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

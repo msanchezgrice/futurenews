@@ -1,0 +1,14 @@
+node_modules/
+.vercel/
+.claude/
+
+.DS_Store
+
+.env
+.env.*
+
+.futurenews/
+
+data/*.sqlite-shm
+data/*.sqlite-wal
+data/*.sqlite-journal

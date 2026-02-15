@@ -1,0 +1,401 @@
+{
+  "version": "news-1770997540798",
+  "generatedAt": "2026-02-13T15:45:40.798Z",
+  "source": "news-front-page",
+  "sections": {
+    "U.S.": [
+      {
+        "title": "Beginning fully autonomous operations with the 6th-generation Waymo driver",
+        "source": "ra7",
+        "section": "U.S.",
+        "excerpt": "https://waymo.com/blog/2026/02/ro-on-6th-gen-waymo-driver"
+      }
+    ],
+    "World": [
+      {
+        "title": "Gemini 3 Deep Think",
+        "source": "tosh",
+        "section": "World",
+        "excerpt": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-deep-think/"
+      },
+      {
+        "title": "Improving 15 LLMs at Coding in One Afternoon. Only the Harness Changed",
+        "source": "kachapopopow",
+        "section": "World",
+        "excerpt": "http://blog.can.ac/2026/02/12/the-harness-problem/"
+      },
+      {
+        "title": "Resizing windows on macOS Tahoe – the saga continues",
+        "source": "erickhill",
+        "section": "World",
+        "excerpt": "https://noheger.at/blog/2026/02/12/resizing-windows-on-macos-tahoe-the-saga-continues/"
+      },
+      {
+        "title": "Major European payment processor can't send email to Google Workspace users",
+        "source": "thatha7777",
+        "section": "World",
+        "excerpt": "https://atha.io/blog/2026-02-12-viva"
+      },
+      {
+        "title": "Tell HN: Ralph Giles has died (Xiph.org| Rust@Mozilla | Ghostscript)",
+        "source": "ffworld",
+        "section": "World",
+        "excerpt": ""
+      },
+      {
+        "title": "Monosketch",
+        "source": "penguin_booze",
+        "section": "World",
+        "excerpt": "https://monosketch.io/"
+      },
+      {
+        "title": "AWS Adds support for nested virtualization",
+        "source": "sitole",
+        "section": "World",
+        "excerpt": "https://github.com/aws/aws-sdk-go-v2/commit/3dca5e45d5ad05460b93410087833cbaa624754e"
+      },
+      {
+        "title": "MMAcevedo aka Lena by qntm",
+        "source": "stickynotememo",
+        "section": "World",
+        "excerpt": "https://qntm.org/mmacevedo"
+      },
+      {
+        "title": "My Grandma Was a Fed – Lessons from Digitizing Hours of Childhood",
+        "source": "SamPatt",
+        "section": "World",
+        "excerpt": "https://sampatt.com/blog/2025-12-13-my-grandma-was-a-fed-lessons-from-digitizing-hundreds-of-hours-of-childhood/"
+      },
+      {
+        "title": "Zed editor switching graphics lib from blade to wgpu",
+        "source": "jpeeler",
+        "section": "World",
+        "excerpt": "https://github.com/zed-industries/zed/pull/46758"
+      },
+      {
+        "title": "Cache Monet",
+        "source": "keepamovin",
+        "section": "World",
+        "excerpt": "https://cachemonet.com"
+      },
+      {
+        "title": "We interfaced single-threaded C++ with multi-threaded Rust",
+        "source": "lukastyrychtr",
+        "section": "World",
+        "excerpt": "https://antithesis.com/blog/2026/rust_cpp/"
+      },
+      {
+        "title": "CSS-Doodle",
+        "source": "dsego",
+        "section": "World",
+        "excerpt": "https://css-doodle.com/"
+      },
+      {
+        "title": "Ruby Newbie Is Joining the Ruby Users Forum",
+        "source": "jvrc",
+        "section": "World",
+        "excerpt": "https://www.rubyforum.org/tag/getting-started"
+      },
+      {
+        "title": "Open Source Is Not About You (2018)",
+        "source": "doubleg",
+        "section": "World",
+        "excerpt": "https://gist.github.com/richhickey/1563cddea1002958f96e7ba9519972d9"
+      },
+      {
+        "title": "Implementing Auto Tiling with Just 5 Tiles",
+        "source": "todsacerdoti",
+        "section": "World",
+        "excerpt": "https://www.kyledunbar.dev/2026/02/05/Implementing-auto-tiling-with-just-5-tiles.html"
+      },
+      {
+        "title": "Green’s Dictionary of Slang - Five hundred years of the vulgar tongue",
+        "source": "mxfh",
+        "section": "World",
+        "excerpt": "https://greensdictofslang.com/"
+      },
+      {
+        "title": "Faster Than Dijkstra?",
+        "source": "drbruced",
+        "section": "World",
+        "excerpt": "https://systemsapproach.org/2026/02/09/faster-than-dijkstra/"
+      },
+      {
+        "title": "Apocalypse no: how almost everything we thought we knew about the Maya is wrong",
+        "source": "speckx",
+        "section": "World",
+        "excerpt": "https://www.theguardian.com/news/2026/feb/12/apocalypse-no-how-almost-everything-we-thought-we-knew-about-the-maya-is-wrong"
+      },
+      {
+        "title": "The life of a playboy publisher who shaped 20th-century literature",
+        "source": "benbreen",
+        "section": "World",
+        "excerpt": "https://www.washingtonpost.com/books/2026/01/09/bennett-cerf-biography-nothing-random-feldman-book-review/"
+      },
+      {
+        "title": "colorForth",
+        "source": "tosh",
+        "section": "World",
+        "excerpt": "https://colorforth.github.io/cf.htm"
+      },
+      {
+        "title": "Pebble Round 2",
+        "source": "noflag",
+        "section": "World",
+        "excerpt": "https://techcrunch.com/2026/01/02/pebble-reboots-its-thinnest-smartwatch-with-the-pebble-round-2/"
+      },
+      {
+        "title": "SpiceDB Query Planner",
+        "source": "mparnisari",
+        "section": "World",
+        "excerpt": "https://authzed.com/blog/introducing-spicedb-query-planner"
+      },
+      {
+        "title": "Cross-Region MSK Replication: K2K vs. MirrorMaker2",
+        "source": "andmarios",
+        "section": "World",
+        "excerpt": "https://medium.com/lensesio/cross-region-msk-replication-a-comprehensive-performance-comparison-of-lenses-k2k-vs-mirrormaker2-e9d930de01bf"
+      },
+      {
+        "title": "C++ lowcode toolkit for ERP and Accounting Software",
+        "source": "basesdk",
+        "section": "World",
+        "excerpt": "https://fin.in.net"
+      },
+      {
+        "title": "Show HN: Debugging consent and conversion tracking with a headless scan",
+        "source": "marstay",
+        "section": "World",
+        "excerpt": "https://consentcheck.online/"
+      },
+      {
+        "title": "SWE-gen: Scaling SWE-bench task generation",
+        "source": "coffeecoder123",
+        "section": "World",
+        "excerpt": "https://github.com/abundant-ai/SWE-gen"
+      },
+      {
+        "title": "Why Community Translation Falls Short for Your Plugins and Themes",
+        "source": "taubek",
+        "section": "World",
+        "excerpt": "https://wpml.org/announcements/2025/12/why-community-translation-falls-short-for-your-plugins-and-themes/"
+      },
+      {
+        "title": "GovDash (YC W22) Is Hiring Senior Engineers (Product and Search) in NYC",
+        "source": "timothygoltser",
+        "section": "World",
+        "excerpt": "https://www.workatastartup.com/companies/govdash"
+      },
+      {
+        "title": "Asimov (YC W26) Is Hiring",
+        "source": "lningthou",
+        "section": "World",
+        "excerpt": ""
+      },
+      {
+        "title": "CoLoop (YC S21) Is Hiring Ex Technical Founders in London",
+        "source": "mrlowlevel",
+        "section": "World",
+        "excerpt": "https://www.workatastartup.com/jobs/90016"
+      },
+      {
+        "title": "Converge (YC S23) Is Hiring Product Engineers (NYC, In-Person)",
+        "source": "thomashlvt",
+        "section": "World",
+        "excerpt": "https://www.runconverge.com/careers/product-engineer"
+      },
+      {
+        "title": "CollectWise (YC F24) Is Hiring",
+        "source": "OBrien_1107",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/collectwise/jobs/ZunnO6k-ai-agent-engineer"
+      },
+      {
+        "title": "Insane Growth Goldbridge (YC F25) Is Hiring a Forward Deployed Engineer",
+        "source": "alvinsalehi",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/goldbridge/jobs/78gGEHh-forward-deployed-engineer"
+      },
+      {
+        "title": "BoldVoice (YC S21) Is Hiring Fullstack and Machine Learning Engineers",
+        "source": "ilyausorov",
+        "section": "World",
+        "excerpt": "https://boldvoice.notion.site/careers-page?p=2e871a9bf729806c81f6e47f32e32622&pm=s"
+      },
+      {
+        "title": "Photoroom (YC S20) Is Hiring a Head of Cross-Platform (Rust) in Paris",
+        "source": "ea016",
+        "section": "World",
+        "excerpt": "https://jobs.ashbyhq.com/photoroom/dc994a7c-e104-46e1-81c3-b88d635398b9"
+      },
+      {
+        "title": "Reflex (YC W23) Senior Software Engineer Infra",
+        "source": "apetuskey",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/reflex/jobs/Jcwrz7A-lead-software-engineer-infra"
+      },
+      {
+        "title": "Questom (YC F25) is hiring an engineer",
+        "source": "ritanshu",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/questom/jobs/UBebsyO-founding-engineer"
+      },
+      {
+        "title": "Kyber (YC W23) Is Hiring a Staff Engineer",
+        "source": "asontha",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/kyber/jobs/GPJkv5v-staff-engineer-tech-lead"
+      },
+      {
+        "title": "Hypercubic (YC F25) Is Hiring a Founding SWE and COBOL Engineer",
+        "source": "sai18",
+        "section": "World",
+        "excerpt": "https://www.ycombinator.com/companies/hypercubic/jobs"
+      }
+    ],
+    "Business": [
+      {
+        "title": "An AI agent published a hit piece on me",
+        "source": "scottshambaugh",
+        "section": "Business",
+        "excerpt": "https://theshamblog.com/an-ai-agent-published-a-hit-piece-on-me/"
+      },
+      {
+        "title": "MinIO repository is no longer maintained",
+        "source": "psvmcc",
+        "section": "Business",
+        "excerpt": "https://github.com/minio/minio/commit/7aac2a2c5b7c882e68c1ce017d8256be2feea27f"
+      },
+      {
+        "title": "Show HN: I speak 5 languages. Duolingo taught me none. So I built lairner",
+        "source": "t17r",
+        "section": "Business",
+        "excerpt": "https://lairner.com"
+      },
+      {
+        "title": "Computer Chronicles: AI (1984-1998)",
+        "source": "LeoPanthera",
+        "section": "Business",
+        "excerpt": "https://computerchronicles.tv/#collection/ai"
+      },
+      {
+        "title": "Ditch the Chain-of-Thought Hacks: A Modular System for Composing AI Operations",
+        "source": "mrkn1",
+        "section": "Business",
+        "excerpt": "https://vibboai.com"
+      },
+      {
+        "title": "Building an RL environment to train agents for production debugging",
+        "source": "anyekwest",
+        "section": "Business",
+        "excerpt": "https://www.dbow.me/rl.html"
+      },
+      {
+        "title": "Show HN: Show HN: I built a fail-closed watchdog for ESP32/Arduino in C++",
+        "source": "mikayelgr",
+        "section": "Business",
+        "excerpt": "https://github.com/weareqrystal/qrystal_uplink_sdks"
+      },
+      {
+        "title": "One Last Trip: Traveling with my brother's remains (2022)",
+        "source": "NaOH",
+        "section": "Business",
+        "excerpt": "https://www.thecut.com/2022/03/traveling-brothers-remains.html"
+      },
+      {
+        "title": "Gauntlet AI (YC S17) train you to master building with AI, give you $200k+ job",
+        "source": "austenallred",
+        "section": "Business",
+        "excerpt": "http://qualify.gauntletAI.com"
+      },
+      {
+        "title": "Maihem (YC W24): hiring senior robotics perception engineer (London, on-site)",
+        "source": "mxrns",
+        "section": "Business",
+        "excerpt": "https://jobs.ashbyhq.com/maihem/8da3fa8b-5544-45de-a99e-888021519758"
+      },
+      {
+        "title": "Freshpaint (YC S19) Is Hiring a Senior SWE, Data",
+        "source": "malisper",
+        "section": "Business",
+        "excerpt": "https://www.freshpaint.io/about?ashby_jid=3a7926ba-cf51-4084-9196-4361a7e97761"
+      }
+    ],
+    "Technology": [
+      {
+        "title": "GPT‑5.3‑Codex‑Spark",
+        "source": "meetpateltech",
+        "section": "Technology",
+        "excerpt": "https://openai.com/index/introducing-gpt-5-3-codex-spark/"
+      },
+      {
+        "title": "Polis: Open-source platform for large-scale civic deliberation",
+        "source": "mefengl",
+        "section": "Technology",
+        "excerpt": "https://pol.is/home2"
+      },
+      {
+        "title": "Apple, fix my keyboard before the timer ends or I'm leaving iPhone",
+        "source": "ozzyphantom",
+        "section": "Technology",
+        "excerpt": "https://ios-countdown.win/"
+      },
+      {
+        "title": "Advanced Aerial Robotics Made Simple",
+        "source": "jacquesm",
+        "section": "Technology",
+        "excerpt": "https://www.drehmflight.com"
+      }
+    ],
+    "Arts": [
+      {
+        "title": "Japan's Dododo Land, the most irritating place on Earth",
+        "source": "zdw",
+        "section": "Arts",
+        "excerpt": "https://soranews24.com/2026/02/07/take-a-trip-to-japans-dododo-land-the-most-irritating-place-on-earth/"
+      },
+      {
+        "title": "Particle Lenia",
+        "source": "memalign",
+        "section": "Arts",
+        "excerpt": "https://znah.net/lenia/"
+      },
+      {
+        "title": "Emerge Career (YC S22) is hiring a product designer",
+        "source": "gabesaruhashi",
+        "section": "Arts",
+        "excerpt": "https://www.ycombinator.com/companies/emerge-career/jobs/omqT34S-founding-product-designer"
+      }
+    ],
+    "Lifestyle": [
+      {
+        "title": "The Homepage of Ron Goodwin",
+        "source": "ocfnash",
+        "section": "Lifestyle",
+        "excerpt": "http://rongoodwin.co.uk/"
+      }
+    ],
+    "Opinion": [
+      {
+        "title": "labor transition compacts",
+        "source": "Fallback",
+        "section": "Opinion"
+      },
+      {
+        "title": "algorithmic accountability",
+        "source": "Fallback",
+        "section": "Opinion"
+      },
+      {
+        "title": "digital civil rights",
+        "source": "Fallback",
+        "section": "Opinion"
+      },
+      {
+        "title": "public oversight layers",
+        "source": "Fallback",
+        "section": "Opinion"
+      }
+    ]
+  }
+}

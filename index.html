@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>The Future Times — Edition</title>
+  <link rel="stylesheet" href="assets/styles.css"/>
+</head>
+<body>
+  <div id="topLoadingBar" class="top-loading-bar" aria-hidden="true"><span class="top-loading-bar-fill"></span></div>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">FT</div>
+        <div>
+          <h1>THE FUTURE TIMES</h1>
+          <div class="tag">Edition • <span id="editionDate">—</span></div>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="pill"><span>Edition</span> <strong id="offsetYears">+5 years</strong></div>
+        <select id="editionYears" class="editionSelect" aria-label="Select years in the future"></select>
+      </div>
+    </div>
+    <nav id="sectionNav" class="section-nav" aria-label="Section navigation">
+      <a href="#" data-section="All" class="is-active">All</a>
+      <a href="#" data-section="U.S.">U.S.</a>
+      <a href="#" data-section="World">World</a>
+      <a href="#" data-section="Business">Business</a>
+      <a href="#" data-section="Technology">Technology</a>
+      <a href="#" data-section="Arts">Arts</a>
+      <a href="#" data-section="Lifestyle">Lifestyle</a>
+      <a href="#" data-section="Opinion">Opinion</a>
+    </nav>
+
+    <div class="grid">
+      <div>
+        <div id="hero" class="card hero">
+          <div class="content">
+          <div class="kicker"><span class="dot"></span><span>LEAD STORY</span></div>
+            <a id="heroLink" href="article.html?id=humanoids-labor-market&years=5" class="article-link" style="display:block">
+              <div class="badge"><span class="spark">✦</span><strong>Robotics</strong><span style="color:var(--muted)">Edition</span></div>
+              <h2 class="headline">—</h2>
+              <p class="dek">—</p>
+              <div class="meta">—</div>
+            </a>
+          </div>
+          <div class="media">
+            <img src="assets/img/humanoids-labor-market.svg" alt="Hero"/>
+          </div>
+        </div>
+
+        <div class="card section" style="margin-top:18px">
+          <h2>Today’s future front page</h2>
+          <div id="sectionPanels" class="section-panels"></div>
+        </div>
+
+        <div class="card footer-note" style="margin-top:18px">
+          <strong>Context:</strong> A future-dated front page generated daily from public signals, with full articles rendered live when you click.<br/>
+          <span id="notes"></span>
+          <div class="small" style="margin-top:10px">
+            <a id="daySignalLink" href="/api/day-signal?format=html" target="_blank" rel="noopener">View this edition’s signal pack (inputs + evidence)</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="card rail">
+          <h2>More stories</h2>
+          <div id="sideRailTiles" class="rail-tiles"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

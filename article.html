@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>The Future Times — Article (Mockup)</title>
+  <link rel="stylesheet" href="assets/styles.css"/>
+</head>
+<body>
+  <div id="topLoadingBar" class="top-loading-bar" aria-hidden="true"><span class="top-loading-bar-fill"></span></div>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo">FT</div>
+        <div>
+          <h1><a id="homeLink" href="index.html">THE FUTURE TIMES</a></h1>
+          <div id="editionTag" class="tag">Edition • —</div>
+        </div>
+      </div>
+      <div class="controls">
+        <a class="btn" id="frontPageLink" href="index.html">← Front Page</a>
+        <div class="pill"><span>Edition</span> <strong id="offsetYears">+5 years</strong></div>
+        <select id="editionYears" class="editionSelect" aria-label="Select years in the future"></select>
+        <button class="btn" onclick="navigator.clipboard.writeText(location.href); alert('Link copied (in real app: add share sheet)')">Share</button>
+      </div>
+    </div>
+
+    <div class="articleShell">
+        <div class="card article">
+        <img id="aHero" class="heroImg" src="" alt="Hero"/>
+        <div class="aBody">
+          <div class="badge"><span class="spark">✦</span><strong id="aSection">—</strong><span style="color:var(--muted)">Edition</span></div>
+          <h1 id="aTitle" class="aTitle">—</h1>
+          <p id="aDek" class="aDek">—</p>
+          <div id="aMeta" class="aMeta">—</div>
+          <div class="renderStatus" id="renderStatus">
+            <div>
+              <div id="renderStatusText">Initializing live renderer…</div>
+              <div class="small" id="renderProgressText"></div>
+            </div>
+            <div class="renderBarWrap">
+              <div id="renderProgress" class="renderBar"></div>
+            </div>
+          </div>
+          <hr class="soft"/>
+          <div id="md" class="md"></div>
+          <hr class="soft"/>
+          <div class="small"><strong>Image prompt (for Pro3 Nano Banana Pro):</strong> <span id="prompt"></span></div>
+          <div class="small" style="margin-top:10px">
+            <a id="daySignalLink" href="/api/day-signal?format=html" target="_blank" rel="noopener">View this edition’s signal pack (inputs + evidence)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>
