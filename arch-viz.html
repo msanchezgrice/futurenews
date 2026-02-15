@@ -19,24 +19,17 @@
     --purple: #bc8cff;
     --cyan: #39d353;
     --pink: #f778ba;
+    --yellow: #e3b341;
     --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
     --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg);
-    color: var(--fg);
-    font-family: var(--sans);
-    line-height: 1.6;
-    padding: 0;
-  }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); line-height: 1.6; }
 
-  /* ── NAV ── */
   nav {
     position: sticky; top: 0; z-index: 100;
-    background: rgba(13, 17, 23, 0.92);
-    backdrop-filter: blur(12px);
+    background: rgba(13,17,23,0.92); backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border);
     padding: 12px 24px;
     display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -45,184 +38,106 @@
     color: var(--fg-muted); text-decoration: none;
     font-size: 13px; font-family: var(--mono);
     padding: 4px 12px; border-radius: 6px;
-    border: 1px solid transparent;
-    transition: all .15s;
+    border: 1px solid transparent; transition: all .15s;
   }
-  nav a:hover, nav a.active {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(88, 166, 255, 0.08);
-  }
-  nav .title {
-    font-weight: 700; font-size: 15px; color: var(--fg);
-    margin-right: 16px; letter-spacing: .02em;
-  }
+  nav a:hover, nav a.active { color: var(--accent); border-color: var(--accent); background: rgba(88,166,255,0.08); }
+  nav .title { font-weight: 700; font-size: 15px; color: var(--fg); margin-right: 16px; letter-spacing: .02em; }
 
-  /* ── SECTIONS ── */
-  .section {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 48px 24px 24px;
-  }
-  .section h2 {
-    font-size: 22px; font-weight: 700;
-    color: var(--fg); margin-bottom: 8px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .section h2 .num {
-    font-family: var(--mono); font-size: 14px;
-    color: var(--accent); opacity: .7;
-  }
-  .section .subtitle {
-    color: var(--fg-muted); font-size: 14px; margin-bottom: 24px;
-  }
+  .section { max-width: 1200px; margin: 0 auto; padding: 48px 24px 24px; }
+  .section h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .section h2 .num { font-family: var(--mono); font-size: 14px; color: var(--accent); opacity: .7; }
+  .section .subtitle { color: var(--fg-muted); font-size: 14px; margin-bottom: 24px; }
+  .section h3 { margin-top: 28px; font-size: 15px; color: var(--fg-muted); margin-bottom: 12px; }
 
-  /* ── CARDS ── */
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
   .card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 20px;
-    transition: border-color .15s, background .15s;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 20px; transition: border-color .15s, background .15s;
   }
   .card:hover { border-color: var(--accent); background: var(--card-hover); }
-  .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .card h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; color: var(--fg); }
   .card p, .card ul { font-size: 13px; color: var(--fg-muted); }
   .card ul { padding-left: 18px; }
   .card li { margin: 3px 0; }
-  .card code {
-    font-family: var(--mono); font-size: 12px;
-    background: rgba(88, 166, 255, 0.08);
-    color: var(--accent); padding: 1px 6px; border-radius: 4px;
-  }
+  .card code { font-family: var(--mono); font-size: 12px; background: rgba(88,166,255,0.08); color: var(--accent); padding: 1px 6px; border-radius: 4px; }
 
-  .badge {
-    display: inline-block; font-family: var(--mono); font-size: 11px;
-    padding: 2px 8px; border-radius: 10px; font-weight: 600;
-  }
-  .badge-green { background: rgba(63, 185, 80, 0.15); color: var(--green); }
-  .badge-orange { background: rgba(210, 153, 34, 0.15); color: var(--orange); }
-  .badge-purple { background: rgba(188, 140, 255, 0.15); color: var(--purple); }
-  .badge-red { background: rgba(248, 81, 73, 0.15); color: var(--red); }
-  .badge-cyan { background: rgba(57, 211, 83, 0.12); color: var(--cyan); }
-  .badge-blue { background: rgba(88, 166, 255, 0.12); color: var(--accent); }
-  .badge-pink { background: rgba(247, 120, 186, 0.12); color: var(--pink); }
+  .badge { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-orange { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .badge-purple { background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge-red { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-cyan { background: rgba(57,211,83,0.12); color: var(--cyan); }
+  .badge-blue { background: rgba(88,166,255,0.12); color: var(--accent); }
+  .badge-pink { background: rgba(247,120,186,0.12); color: var(--pink); }
+  .badge-yellow { background: rgba(227,179,65,0.12); color: var(--yellow); }
 
-  /* ── FLOW DIAGRAM ── */
-  .flow {
-    display: flex; align-items: stretch; gap: 0;
-    overflow-x: auto; padding: 16px 0;
-  }
+  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 16px 0; }
   .flow-step {
-    flex: 0 0 auto;
-    min-width: 160px; max-width: 200px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    text-align: center;
-    position: relative;
+    flex: 0 0 auto; min-width: 155px; max-width: 190px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px; text-align: center;
   }
-  .flow-step .step-num {
-    font-family: var(--mono); font-size: 11px;
-    color: var(--accent); opacity: .6;
-    margin-bottom: 4px;
-  }
+  .flow-step .step-num { font-family: var(--mono); font-size: 11px; color: var(--accent); opacity: .6; margin-bottom: 4px; }
   .flow-step h4 { font-size: 14px; margin-bottom: 6px; }
   .flow-step p { font-size: 11px; color: var(--fg-muted); }
-  .flow-arrow {
-    flex: 0 0 40px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--fg-muted); font-size: 20px;
-  }
+  .flow-arrow { flex: 0 0 36px; display: flex; align-items: center; justify-content: center; color: var(--fg-muted); font-size: 18px; }
 
-  /* ── TABLE ── */
-  table {
-    width: 100%; border-collapse: collapse;
-    font-size: 13px; margin: 16px 0;
-  }
-  th, td {
-    text-align: left; padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  th {
-    font-family: var(--mono); font-size: 11px;
-    color: var(--fg-muted); text-transform: uppercase;
-    letter-spacing: .04em;
-    background: rgba(22, 27, 34, 0.7);
-    position: sticky; top: 48px;
-  }
-  td { color: var(--fg); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 16px 0; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { font-family: var(--mono); font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: .04em; background: rgba(22,27,34,0.7); position: sticky; top: 48px; }
   td code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
-  tr:hover td { background: rgba(88, 166, 255, 0.03); }
+  tr:hover td { background: rgba(88,166,255,0.03); }
 
-  /* ── DB SCHEMA ── */
   .schema-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-  .schema-table {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    overflow: hidden;
-  }
-  .schema-table .table-name {
-    font-family: var(--mono); font-size: 13px; font-weight: 700;
-    padding: 10px 14px; background: rgba(88, 166, 255, 0.06);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .schema-table .cols {
-    padding: 8px 14px; font-size: 12px; font-family: var(--mono);
-    color: var(--fg-muted);
-  }
+  .schema-table { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .schema-table .table-name { font-family: var(--mono); font-size: 13px; font-weight: 700; padding: 10px 14px; background: rgba(88,166,255,0.06); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .schema-table .cols { padding: 8px 14px; font-size: 12px; font-family: var(--mono); color: var(--fg-muted); }
   .schema-table .cols .pk { color: var(--orange); }
   .schema-table .cols .fk { color: var(--purple); }
   .schema-table .cols div { padding: 2px 0; }
 
-  /* ── COST BARS ── */
   .cost-row { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
-  .cost-label { flex: 0 0 180px; font-size: 13px; font-family: var(--mono); color: var(--fg-muted); text-align: right; }
-  .cost-bar-bg { flex: 1; height: 24px; background: var(--card); border-radius: 4px; overflow: hidden; position: relative; border: 1px solid var(--border); }
+  .cost-label { flex: 0 0 200px; font-size: 13px; font-family: var(--mono); color: var(--fg-muted); text-align: right; }
+  .cost-bar-bg { flex: 1; height: 24px; background: var(--card); border-radius: 4px; overflow: hidden; border: 1px solid var(--border); }
   .cost-bar { height: 100%; border-radius: 3px; transition: width .6s ease; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-family: var(--mono); color: #fff; font-weight: 600; }
   .cost-val { flex: 0 0 100px; font-size: 13px; font-family: var(--mono); color: var(--fg); }
 
-  /* ── STATE MACHINE ── */
-  .state-machine {
-    display: flex; flex-wrap: wrap; gap: 24px; padding: 16px 0;
-  }
-  .sm-group {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    padding: 20px; flex: 1; min-width: 300px;
-  }
+  .state-machine { display: flex; flex-wrap: wrap; gap: 24px; padding: 16px 0; }
+  .sm-group { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; flex: 1; min-width: 300px; }
   .sm-group h4 { font-size: 14px; margin-bottom: 12px; color: var(--accent); }
   .sm-states { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .sm-state {
-    font-family: var(--mono); font-size: 12px;
-    padding: 6px 12px; border-radius: 6px;
-    border: 1px solid var(--border);
-    background: rgba(22, 27, 34, 0.8);
-  }
+  .sm-state { font-family: var(--mono); font-size: 12px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: rgba(22,27,34,0.8); }
   .sm-arrow { color: var(--fg-muted); font-size: 16px; }
 
-  /* ── FILE TREE ── */
   .file-tree {
     font-family: var(--mono); font-size: 13px;
     background: var(--card); border: 1px solid var(--border);
-    border-radius: 8px; padding: 20px; line-height: 1.8;
-    overflow-x: auto;
+    border-radius: 8px; padding: 20px; line-height: 1.8; overflow-x: auto;
   }
   .file-tree .dir { color: var(--accent); font-weight: 600; }
   .file-tree .file { color: var(--fg-muted); }
   .file-tree .comment { color: var(--fg-muted); opacity: .5; font-style: italic; }
   .file-tree .lines { color: var(--orange); font-size: 11px; }
 
-  /* ── DIVIDER ── */
-  .divider { height: 1px; background: var(--border); margin: 40px 0; }
+  .env-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+  .env-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .env-card h4 { font-size: 13px; font-family: var(--mono); color: var(--accent); margin-bottom: 10px; }
+  .env-card .env-row { display: flex; gap: 8px; font-size: 12px; font-family: var(--mono); line-height: 1.8; }
+  .env-card .env-key { color: var(--green); min-width: 220px; }
+  .env-card .env-val { color: var(--fg-muted); }
 
-  /* ── RESPONSIVE ── */
+  .divider { height: 1px; background: var(--border); margin: 40px 0; }
+  .stat-row { display: flex; gap: 24px; flex-wrap: wrap; margin: 16px 0; }
+  .stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; min-width: 140px; }
+  .stat .val { font-size: 28px; font-weight: 700; font-family: var(--mono); color: var(--accent); }
+  .stat .label { font-size: 12px; color: var(--fg-muted); margin-top: 4px; }
+
   @media (max-width: 768px) {
     .flow { flex-direction: column; align-items: center; }
     .flow-arrow { transform: rotate(90deg); flex: 0 0 30px; }
     .cards { grid-template-columns: 1fr; }
     .schema-grid { grid-template-columns: 1fr; }
+    .env-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -236,199 +151,243 @@
   <a href="#states">States</a>
   <a href="#schema">Database</a>
   <a href="#api">API</a>
+  <a href="#env">Env Vars</a>
   <a href="#llm">LLM Usage</a>
   <a href="#costs">Cost Estimate</a>
 </nav>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="section" id="overview">
   <h2><span class="num">01</span> System Overview</h2>
-  <p class="subtitle">A "future newspaper" — fetches real-world signals, clusters them into topics, generates editions set 0-10 years ahead, and renders articles on-click via WebSocket streaming.</p>
+  <p class="subtitle">A "future newspaper" — fetches real-world signals, clusters them into topics, generates editions set 0-10 years ahead, optionally curates with Opus, and renders articles on-click via WebSocket streaming. 9,702 lines of JS. Single dependency: <code>ws</code>.</p>
 
-  <div class="cards">
+  <div class="stat-row">
+    <div class="stat"><div class="val">9,702</div><div class="label">Lines of JS</div></div>
+    <div class="stat"><div class="val">22</div><div class="label">Data Sources</div></div>
+    <div class="stat"><div class="val">14</div><div class="label">DB Tables</div></div>
+    <div class="stat"><div class="val">24+</div><div class="label">API Routes</div></div>
+    <div class="stat"><div class="val">3</div><div class="label">LLM Touchpoints</div></div>
+    <div class="stat"><div class="val">8</div><div class="label">News Sections</div></div>
+    <div class="stat"><div class="val">11</div><div class="label">Year Variants (0-10)</div></div>
+  </div>
+
+  <div class="cards" style="margin-top:24px;">
     <div class="card">
-      <h3><span class="badge badge-blue">INGEST</span> 26 Sources</h3>
+      <h3><span class="badge badge-blue">INGEST</span> 22 Sources</h3>
       <ul>
-        <li><strong>RSS feeds</strong> — NPR, BBC, Guardian, PBS, Ars Technica, arXiv (~20)</li>
-        <li><strong>Polymarket API</strong> — prediction market questions/probabilities</li>
-        <li><strong>FRED CSV</strong> — Federal Reserve economic data series</li>
+        <li><strong>15 RSS feeds</strong> — NPR, BBC, Guardian (×5), PBS, Ars Technica (×2), HN, TechCrunch AI, Verge AI, MIT Tech Review</li>
+        <li><strong>4 arXiv RSS</strong> — cs.AI, cs.LG, cs.CL, cs.RO (240min interval)</li>
+        <li><strong>1 Polymarket API</strong> — prediction market questions/probabilities</li>
+        <li><strong>5 FRED CSV series</strong> — UNRATE, CPIAUCSL, FEDFUNDS, DGS10, DGS2 (as 1 source entry)</li>
       </ul>
-      <p style="margin-top:8px">Refresh: every <code>60 min</code> (configurable per source)</p>
+      <p style="margin-top:8px">Refresh: <code>60-240 min</code> per source</p>
     </div>
     <div class="card">
       <h3><span class="badge badge-green">PIPELINE</span> Signal → Edition</h3>
       <ul>
-        <li>Fetch → raw_items (dedup by URL fingerprint)</li>
-        <li>Classify → signals (section, horizon, score)</li>
-        <li>Cluster → topics (Jaccard similarity >0.3)</li>
-        <li>Generate → editions (per yearsForward 0-10)</li>
-        <li>Curate → story_curations (optional LLM)</li>
+        <li>Fetch → <code>raw_items</code> (dedup by URL fingerprint)</li>
+        <li>Classify → <code>signals</code> (section, horizon, score, entities)</li>
+        <li>Cluster → <code>topics</code> (Jaccard similarity >0.3)</li>
+        <li>Match → <code>topic_evidence</code> (standing topics enrichment)</li>
+        <li>Generate → <code>editions</code> (per yearsForward 0-10)</li>
+        <li>Curate → <code>story_curations</code> (optional LLM)</li>
       </ul>
     </div>
     <div class="card">
-      <h3><span class="badge badge-purple">LLM</span> Two Touchpoints</h3>
+      <h3><span class="badge badge-purple">LLM</span> Three Touchpoints</h3>
       <ul>
-        <li><strong>Curation</strong> — Opus 4.6 rewrites headlines, composes deks, prewrite key stories (1 batch call/day, optional)</li>
-        <li><strong>Rendering</strong> — Spark WS provider streams article body on-click (external service)</li>
+        <li><strong>Curation</strong> — Opus 4.6 rewrites headlines, composes deks, prewrites key stories (1 batch call/day)</li>
+        <li><strong>Rendering</strong> — Spark WS provider streams article body on-click</li>
+        <li><strong>Images</strong> — DALL-E 3 generates hero images per story (1792×1024)</li>
       </ul>
-      <p style="margin-top:8px">Default: <code>MOCK</code> mode (zero API calls)</p>
+      <p style="margin-top:8px">Default: <code>MOCK</code> mode for all three (zero API calls)</p>
     </div>
     <div class="card">
-      <h3><span class="badge badge-orange">SERVE</span> Express + WebSocket</h3>
+      <h3><span class="badge badge-orange">SERVE</span> Node.js HTTP + WS</h3>
       <ul>
-        <li>HTTP: static files, REST API (edition/article/admin)</li>
-        <li>WebSocket: article render streaming</li>
-        <li>Port: <code>57965</code> (fallback tries +53 up to 48 times)</li>
-        <li>Only dependency: <code>ws</code> (everything else is Node built-ins)</li>
+        <li>Pure Node.js <code>http</code> module (no Express)</li>
+        <li>WebSocket via <code>ws</code> library for article streaming</li>
+        <li>Port: <code>57965</code> (tries +53 up to 48 times on conflict)</li>
+        <li>Admin auth: cookie-based with <code>ADMIN_SECRET</code></li>
+        <li>Vercel Edge API wrappers in <code>api/</code></li>
       </ul>
     </div>
     <div class="card">
       <h3><span class="badge badge-cyan">FRONTEND</span> Vanilla JS SPA</h3>
       <ul>
-        <li>Two pages: index (edition grid) + article (streamed body)</li>
+        <li>1,429 lines — two pages: index (edition grid) + article (streamed body)</li>
         <li>8 sections: U.S., World, Business, Technology, AI, Arts, Lifestyle, Opinion</li>
-        <li>LocalStorage cache with 20min TTL for articles, 60min for editions</li>
-        <li>Auto-refresh every 45s, year slider 0-10</li>
+        <li>LocalStorage cache v16: articles 20min TTL, editions 60min TTL</li>
+        <li>Auto-refresh polls edition every 45s, year slider 0-10</li>
+        <li>WebSocket for live render streaming with progress bar</li>
       </ul>
     </div>
     <div class="card">
       <h3><span class="badge badge-pink">DATA</span> SQLite</h3>
       <ul>
-        <li>WAL mode + NORMAL sync + foreign keys</li>
-        <li>12 tables across 2 schema versions</li>
-        <li>Standing topics with extrapolation axes &amp; milestones</li>
-        <li>Render cache avoids re-rendering clicked articles</li>
+        <li>WAL mode + NORMAL sync + foreign keys ON</li>
+        <li>14 tables, schema version 2, 12 indices</li>
+        <li>6 standing topics with extrapolation axes &amp; milestones</li>
+        <li>Render cache key: <code>render-{storyId}-v19-c{hash}</code></li>
+        <li>Runtime config: <code>~/.futurenews/runtime.json</code> (0600 perms)</li>
       </ul>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="files">
   <h2><span class="num">02</span> File Structure</h2>
-  <p class="subtitle">Node.js 22+ ES modules, single dependency (ws), ~3,500 lines of application code.</p>
+  <p class="subtitle">Node.js 22+ ES modules, single dependency (ws), 9,702 lines across 20 JS files.</p>
 
   <div class="file-tree">
 <span class="dir">server/</span>
-  <span class="file">server.js</span> <span class="lines">~1400 lines</span> <span class="comment">— HTTP + WS server, article rendering, admin dashboard</span>
-  <span class="file">worker.js</span> <span class="comment">— scheduled daily pipeline runner</span>
-  <span class="file">refresh.js</span> <span class="comment">— one-shot pipeline refresh CLI</span>
-  <span class="file">editionData.js</span> <span class="comment">— edition data helpers</span>
-  <span class="file">primerService.js</span> <span class="comment">— primer/onboarding service</span>
+  <span class="file">server.js</span>        <span class="lines">~1,650 lines</span> <span class="comment">— HTTP + WS server, mock renderer, admin dashboard, Spark client</span>
+  <span class="file">worker.js</span>        <span class="comment">— Scheduled daily pipeline runner (cron-style PIPELINE_DAILY_HHMM)</span>
+  <span class="file">refresh.js</span>       <span class="comment">— One-shot pipeline refresh CLI</span>
+  <span class="file">editionData.js</span>   <span class="comment">— Edition data helpers</span>
+  <span class="file">primerService.js</span> <span class="comment">— Primer/onboarding service</span>
   <span class="dir">pipeline/</span>
-    <span class="file">pipeline.js</span> <span class="lines">~1200 lines</span> <span class="comment">— FutureTimesPipeline class (fetch/classify/cluster/generate/curate)</span>
-    <span class="file">curation.js</span> <span class="lines">~500 lines</span> <span class="comment">— Opus curation: prompt builder, Anthropic/OpenAI callers, mock</span>
-    <span class="file">db.js</span> <span class="lines">~230 lines</span> <span class="comment">— SQLite schema, migrations, 12 tables</span>
-    <span class="file">rss.js</span> <span class="comment">— RSS/Atom feed parser</span>
-    <span class="file">polymarket.js</span> <span class="comment">— Polymarket API client</span>
-    <span class="file">fred.js</span> <span class="comment">— FRED economic data CSV fetcher</span>
-    <span class="file">utils.js</span> <span class="comment">— hashing, slugify, tokenize, formatting</span>
-    <span class="file">runtimeConfig.js</span> <span class="comment">— ~/.futurenews/runtime.json read/write</span>
-    <span class="file">opus-curator.js</span> <span class="comment">— Opus curator orchestration</span>
-<span class="dir">api/</span> <span class="comment">— Vercel serverless API wrappers</span>
-  <span class="file">edition.js</span> <span class="file">day-signal.js</span> <span class="file">article/[id].js</span>
-  <span class="dir">_lib/</span> <span class="file">pipeline.js</span> <span class="file">response.js</span>
+    <span class="file">pipeline.js</span>      <span class="lines">2,460 lines</span> <span class="comment">— FutureTimesPipeline class: fetch/classify/cluster/generate/curate/image-gen</span>
+    <span class="file">curation.js</span>      <span class="lines">518 lines</span>  <span class="comment">— Opus curation: prompt builder, Anthropic API caller, JSON parsing</span>
+    <span class="file">opus-curator.js</span>  <span class="lines">584 lines</span>  <span class="comment">— Mock curator: deterministic curation templates, outline generation</span>
+    <span class="file">db.js</span>            <span class="lines">229 lines</span>  <span class="comment">— SQLite schema, migrations, 14 tables + 12 indices</span>
+    <span class="file">rss.js</span>           <span class="lines">101 lines</span>  <span class="comment">— RSS/Atom feed parser (regex-based, no XML lib)</span>
+    <span class="file">polymarket.js</span>    <span class="lines">71 lines</span>   <span class="comment">— Polymarket Gamma API client</span>
+    <span class="file">fred.js</span>          <span class="lines">79 lines</span>   <span class="comment">— FRED economic data CSV parser</span>
+    <span class="file">utils.js</span>         <span class="lines">121 lines</span>  <span class="comment">— sha256, slugify, tokenize, Jaccard, formatDay, stableHash</span>
+    <span class="file">runtimeConfig.js</span> <span class="lines">116 lines</span>  <span class="comment">— ~/.futurenews/runtime.json read/write (0600 perms, atomic rename)</span>
+<span class="dir">api/</span> <span class="comment">— Vercel Edge Function wrappers</span>
+  <span class="file">edition.js</span>       <span class="lines">34 lines</span>
+  <span class="file">day-signal.js</span>    <span class="lines">77 lines</span>
+  <span class="file">article/[id].js</span>  <span class="lines">179 lines</span>
+  <span class="dir">_lib/</span>
+    <span class="file">pipeline.js</span>    <span class="lines">48 lines</span>   <span class="comment">— Singleton pipeline with /tmp DB fallback for Vercel</span>
+    <span class="file">response.js</span>    <span class="lines">22 lines</span>   <span class="comment">— sendJson, sendHtml helpers</span>
 <span class="dir">assets/</span>
-  <span class="file">app.js</span> <span class="lines">~950 lines</span> <span class="comment">— Vanilla JS SPA (index + article pages)</span>
-  <span class="file">styles.css</span> <span class="comment">— Serif newspaper styling</span>
+  <span class="file">app.js</span>           <span class="lines">1,429 lines</span> <span class="comment">— Vanilla JS SPA (index + article pages, WS client)</span>
+  <span class="file">styles.css</span>       <span class="comment">— Serif newspaper styling (NYT-inspired)</span>
 <span class="dir">config/</span>
-  <span class="file">sources.json</span> <span class="comment">— 26 data sources (RSS, Polymarket, FRED)</span>
-  <span class="file">standing-topics.json</span> <span class="comment">— 6 AI standing topics with axes &amp; milestones</span>
+  <span class="file">sources.json</span>     <span class="comment">— 22 data sources (15 RSS + 4 arXiv + 1 Polymarket + FRED)</span>
+  <span class="file">standing-topics.json</span> <span class="comment">— 6 AI standing topics with axes &amp; milestones (NEW, untracked)</span>
 <span class="dir">data/</span>
-  <span class="file">future-times.sqlite</span> <span class="comment">— main database</span>
-<span class="file">index.html</span> <span class="file">article.html</span> <span class="file">package.json</span>
+  <span class="file">future-times.sqlite</span> <span class="comment">— Main database (~7.4 MB)</span>
+<span class="file">index.html</span> <span class="lines">80 lines</span>
+<span class="file">article.html</span> <span class="lines">60 lines</span>
+<span class="file">package.json</span> <span class="comment">— deps: { ws: ^8.18.0 }</span>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="pipeline">
   <h2><span class="num">03</span> Pipeline Flow</h2>
-  <p class="subtitle">6-stage data pipeline: fetch → classify → cluster → generate → curate → render</p>
+  <p class="subtitle">7-stage data pipeline: fetch → classify → cluster → enrich → generate → curate → render. Image generation as optional side-channel.</p>
 
   <div class="flow">
     <div class="flow-step">
       <div class="step-num">STAGE 1</div>
       <h4>Fetch</h4>
-      <p>26 RSS/API/CSV sources → <code>raw_items</code><br>Dedup by URL fingerprint<br>~hourly refresh</p>
+      <p>22 sources → <code>raw_items</code><br>Dedup by fingerprint<br>RSS + Polymarket + FRED</p>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-step">
       <div class="step-num">STAGE 2</div>
       <h4>Classify</h4>
-      <p>raw_items → <code>signals</code><br>Section (keyword match)<br>Horizon: near/mid/long<br>Score: type×recency×length</p>
+      <p>→ <code>signals</code><br>Section (keyword)<br>Horizon: near/mid/long<br>Entities + keywords<br>Score: type×recency×len</p>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-step">
       <div class="step-num">STAGE 3</div>
       <h4>Cluster</h4>
-      <p>signals → <code>topics</code><br>Jaccard similarity >0.3<br>Max 40/section/day<br>Top 12 keywords each</p>
+      <p>→ <code>topics</code><br>Jaccard >0.3<br>Max 40/section/day<br>Top 12 keywords</p>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step" style="border-color:var(--cyan)">
+      <div class="step-num" style="color:var(--cyan)">STAGE 4</div>
+      <h4>Enrich</h4>
+      <p>→ <code>topic_evidence</code><br>Match signals to<br>6 standing topics<br>AI sub-categorize</p>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-step">
-      <div class="step-num">STAGE 4</div>
+      <div class="step-num">STAGE 5</div>
       <h4>Generate</h4>
-      <p>topics → <code>editions</code><br>Per yearsForward (0-10)<br>5 stories/section<br>Horizon mix shifts by year</p>
+      <p>→ <code>editions</code><br>11 year variants (0-10)<br>5 stories/section<br>Horizon mix per year</p>
     </div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step" style="border-color: var(--purple);">
-      <div class="step-num" style="color:var(--purple)">STAGE 5 (LLM)</div>
+    <div class="flow-step" style="border-color:var(--purple)">
+      <div class="step-num" style="color:var(--purple)">STAGE 6 (LLM)</div>
       <h4>Curate</h4>
-      <p><code>story_curations</code><br>Opus rewrites headlines<br>Composes deks + sparkDirections<br>Prewrites 1-7 key stories</p>
+      <p>→ <code>story_curations</code><br>Opus: headlines, deks<br>sparkDirections<br>Prewrite 1-7 key stories</p>
     </div>
     <div class="flow-arrow">→</div>
-    <div class="flow-step" style="border-color: var(--pink);">
-      <div class="step-num" style="color:var(--pink)">STAGE 6 (on-click)</div>
+    <div class="flow-step" style="border-color:var(--pink)">
+      <div class="step-num" style="color:var(--pink)">STAGE 7 (click)</div>
       <h4>Render</h4>
-      <p><code>render_cache</code><br>WebSocket stream to client<br>Spark provider or mock<br>Cached in DB + localStorage</p>
+      <p>→ <code>render_cache</code><br>WS stream to client<br>Spark or mock<br>+ DALL-E 3 images</p>
     </div>
   </div>
 
-  <h3 style="margin-top:32px; font-size:15px; color:var(--fg-muted);">Horizon Mix by Year</h3>
+  <h3>Horizon Mix by yearsForward</h3>
   <table>
-    <thead><tr><th>yearsForward</th><th>Near (0-1y)</th><th>Mid (1-5y)</th><th>Long (5y+)</th><th>Character</th></tr></thead>
+    <thead><tr><th>yearsForward</th><th>Near (0-2y)</th><th>Mid (2-5y)</th><th>Long (5-10y)</th><th>Descriptor</th></tr></thead>
     <tbody>
-      <tr><td><code>+0</code></td><td>60%</td><td>30%</td><td>10%</td><td>Today's news, extrapolated slightly</td></tr>
-      <tr><td><code>+1</code></td><td>50%</td><td>35%</td><td>15%</td><td>Near-term projections</td></tr>
-      <tr><td><code>+3</code></td><td>30%</td><td>40%</td><td>30%</td><td>Medium-term forecast territory</td></tr>
-      <tr><td><code>+5</code></td><td>20%</td><td>40%</td><td>40%</td><td>Balanced near/far speculation</td></tr>
-      <tr><td><code>+10</code></td><td>10%</td><td>40%</td><td>50%</td><td>Deep future, long-arc stories dominate</td></tr>
+      <tr><td><code>+0</code></td><td>60%</td><td>30%</td><td>10%</td><td>early-adjacent</td></tr>
+      <tr><td><code>+1-2</code></td><td>50%</td><td>35%</td><td>15%</td><td>early-adjacent</td></tr>
+      <tr><td><code>+3-5</code></td><td>25%</td><td>40%</td><td>35%</td><td>next-wave</td></tr>
+      <tr><td><code>+6-8</code></td><td>15%</td><td>40%</td><td>45%</td><td>mid-cycle</td></tr>
+      <tr><td><code>+9-10</code></td><td>10%</td><td>35%</td><td>55%</td><td>late-cycle</td></tr>
     </tbody>
   </table>
 
-  <h3 style="margin-top:32px; font-size:15px; color:var(--fg-muted);">Signal Scoring Formula</h3>
-  <div class="card" style="max-width:600px; margin-top:12px;">
+  <h3>Signal Scoring</h3>
+  <div class="card" style="max-width:620px;">
     <p><code>score = typeBoost × recencyBoost × lengthBoost</code></p>
     <table style="margin:12px 0 0;">
       <tr><td><code>typeBoost</code></td><td>market=1.15, research=1.1, econ=0.95, news=1.0</td></tr>
-      <tr><td><code>recencyBoost</code></td><td>max(0.2, 1.0 / (1.0 + ageHours / 18))</td></tr>
+      <tr><td><code>recencyBoost</code></td><td>max(0.2, 1.0 / (1.0 + ageHours / 18)) — half-life ~18h</td></tr>
       <tr><td><code>lengthBoost</code></td><td>0.6 + min(0.4, titleLength / 120)</td></tr>
     </table>
   </div>
+
+  <h3>Section Classification</h3>
+  <div class="card" style="max-width:620px;">
+    <p>Keyword-match scoring across 8 sections. AI section has 6 sub-categories:</p>
+    <div style="font-size:12px; font-family:var(--mono); color:var(--fg-muted); margin-top:8px; line-height:1.8;">
+      <div><span style="color:var(--accent)">Foundation Models</span> — llm, gpt, claude, gemini, transformer, scaling...</div>
+      <div><span style="color:var(--accent)">Robotics &amp; Embodied AI</span> — robot, humanoid, autonomous, self-driving...</div>
+      <div><span style="color:var(--accent)">AI Agents</span> — agent, tool use, orchestration, multi-agent...</div>
+      <div><span style="color:var(--accent)">AI Safety &amp; Governance</span> — alignment, regulation, bias, interpretability...</div>
+      <div><span style="color:var(--accent)">Applied AI</span> — drug discovery, medical ai, text-to-image, weather...</div>
+      <div><span style="color:var(--accent)">AI Industry</span> — nvidia, compute, data center, funding, valuation...</div>
+    </div>
+  </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="states">
   <h2><span class="num">04</span> State Machines</h2>
-  <p class="subtitle">Three lifecycle state machines: raw items, editions, and article rendering.</p>
+  <p class="subtitle">Five lifecycle state machines plus frontend and scheduler state.</p>
 
   <div class="state-machine">
     <div class="sm-group">
-      <h4>Raw Item Lifecycle</h4>
+      <h4>Raw Item → Signal → Topic Lifecycle</h4>
       <div class="sm-states">
         <div class="sm-state" style="border-color:var(--green)">fetched</div>
         <span class="sm-arrow">→</span>
-        <div class="sm-state">dedup check</div>
+        <div class="sm-state">dedup (fingerprint)</div>
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--accent)">raw_item</div>
         <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--orange)">signal</div>
+        <div class="sm-state" style="border-color:var(--orange)">signal (scored)</div>
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--purple)">topic (clustered)</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--cyan)">evidence (matched)</div>
       </div>
-      <p style="margin-top:12px; font-size:12px; color:var(--fg-muted)">Dedup: fingerprint = sha256(canonical_url). Duplicates silently skipped.</p>
+      <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">Dedup: sha256(canonical_url). Entity extraction: dict-based + proper-noun heuristic (max 10).</p>
     </div>
 
     <div class="sm-group">
@@ -436,13 +395,15 @@
       <div class="sm-states">
         <div class="sm-state" style="border-color:var(--green)">topics ready</div>
         <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--accent)">snapshot built</div>
+        <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--accent)">edition generated</div>
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--purple)">curated (optional)</div>
         <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--orange)">served to frontend</div>
+        <div class="sm-state" style="border-color:var(--orange)">served</div>
       </div>
-      <p style="margin-top:12px; font-size:12px; color:var(--fg-muted)">UNIQUE(day, years_forward). Regeneration overwrites previous edition for same day+year.</p>
+      <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">UNIQUE(day, years_forward). Regeneration overwrites. 11 editions per day (years 0-10).</p>
     </div>
 
     <div class="sm-group">
@@ -456,15 +417,45 @@
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--green)">complete</div>
       </div>
-      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-        <div class="sm-state" style="border-color:var(--cyan)">cached (hit)</div>
-        <span class="sm-arrow" style="font-size:12px">skips to complete</span>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <div class="sm-state" style="border-color:var(--cyan)">cached (3-layer hit)</div>
+        <span class="sm-arrow" style="font-size:12px">skip to complete</span>
         <div class="sm-state" style="border-color:var(--red)">error</div>
-        <span class="sm-arrow" style="font-size:12px">fallback to mock</span>
+        <span class="sm-arrow" style="font-size:12px">fallback mock</span>
       </div>
-      <p style="margin-top:12px; font-size:12px; color:var(--fg-muted)">
-        WS protocol: render.article → render.progress → render.chunk × N → render.complete<br>
-        Cache: render_cache DB table + in-memory Map + localStorage (20min TTL)
+      <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">
+        WS: render.article → render.progress × N → render.chunk × N → render.complete<br>
+        Cache layers: Memory Map → SQLite render_cache → localStorage (20min TTL)<br>
+        Mock stages: evidence(12%) → angle(36%) → draft(68%) → citations(88%) → format(100%)
+      </p>
+    </div>
+
+    <div class="sm-group">
+      <h4>Curation Mode</h4>
+      <div style="font-family:var(--mono); font-size:12px; line-height:2;">
+        <div><span class="badge badge-green">mock</span> Deterministic templates via opus-curator.js (default)</div>
+        <div><span class="badge badge-purple">anthropic</span> Claude Opus 4.6 → Sonnet 4.5 → Haiku 4.5 fallback</div>
+        <div><span class="badge badge-blue">openai</span> OpenAI Responses API (/v1/responses)</div>
+        <div><span class="badge badge-red">off</span> Returns empty curation, no headlines</div>
+      </div>
+    </div>
+
+    <div class="sm-group">
+      <h4>Server Scheduler</h4>
+      <div class="sm-states">
+        <div class="sm-state" style="border-color:var(--green)">boot</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--accent)">tick: refresh()</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--purple)">curateDay()</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--fg-muted)">sleep</div>
+        <span class="sm-arrow">↻</span>
+      </div>
+      <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">
+        Server: <code>PIPELINE_REFRESH_MS</code> = 3,600,000ms (1h interval)<br>
+        Worker: <code>PIPELINE_DAILY_HHMM</code> = "05:30" (cron-style scheduled)<br>
+        Auto-curate: <code>OPUS_AUTO_CURATE</code> ≠ false → curate after each refresh
       </p>
     </div>
 
@@ -472,88 +463,77 @@
       <h4>Frontend State</h4>
       <div style="font-family:var(--mono); font-size:12px; line-height:1.9; color:var(--fg-muted);">
         <div><span style="color:var(--accent)">state.section</span> = "All" | "U.S." | "World" | ... (8 sections)</div>
-        <div><span style="color:var(--accent)">state.day</span> = "YYYY-MM-DD" (current day)</div>
-        <div><span style="color:var(--accent)">state.editions</span> = { day → edition payload } (localStorage cached)</div>
-        <div><span style="color:var(--accent)">state.articles</span> = { storyId → rendered article } (localStorage cached)</div>
-        <div style="margin-top:8px"><span style="color:var(--orange)">yearsForward</span> = 0-10 (URL param, slider control)</div>
-        <div><span style="color:var(--orange)">ws</span> = WebSocket connection (lazy, per article render)</div>
-        <div><span style="color:var(--orange)">inflightArticles</span> = Map of in-flight render requests</div>
+        <div><span style="color:var(--accent)">state.day</span> = "YYYY-MM-DD"</div>
+        <div><span style="color:var(--accent)">state.editions</span> = { key → cached edition } (localStorage, 60min TTL)</div>
+        <div><span style="color:var(--accent)">state.articles</span> = { key → rendered article } (localStorage, 20min TTL)</div>
+        <div style="margin-top:6px"><span style="color:var(--orange)">yearsForward</span> = 0-10 (URL param + slider)</div>
+        <div><span style="color:var(--orange)">ws</span> = WebSocket (lazy connect, per render)</div>
+        <div><span style="color:var(--orange)">inflightArticles</span> = Map&lt;requestId, callback&gt;</div>
+        <div><span style="color:var(--orange)">prefetchedArticles</span> = Set&lt;storyId&gt;</div>
       </div>
     </div>
 
     <div class="sm-group">
-      <h4>Server-Side Scheduler</h4>
+      <h4>Admin Auth Flow</h4>
       <div class="sm-states">
-        <div class="sm-state" style="border-color:var(--green)">boot</div>
+        <div class="sm-state" style="border-color:var(--fg-muted)">no secret set</div>
         <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--accent)">tick (refresh)</div>
-        <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--purple)">curate (if enabled)</div>
-        <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--fg-muted)">sleep 60min</div>
-        <span class="sm-arrow">↻</span>
+        <div class="sm-state" style="border-color:var(--green)">open access (dev)</div>
       </div>
-      <p style="margin-top:12px; font-size:12px; color:var(--fg-muted)">
-        <code>PIPELINE_REFRESH_MS</code> = 3,600,000ms (1h).<br>
-        Auto-curate: <code>OPUS_AUTO_CURATE</code> ≠ false → runs curation after each refresh.
-      </p>
-    </div>
-
-    <div class="sm-group">
-      <h4>Curation Mode State</h4>
-      <div style="font-family:var(--mono); font-size:12px; line-height:1.9;">
-        <div><span class="badge badge-green">mock</span> Deterministic templates, zero API calls (default)</div>
-        <div><span class="badge badge-purple">anthropic</span> Claude Opus 4.6 → Sonnet 4.5 → Haiku 4.5 fallback chain</div>
-        <div><span class="badge badge-blue">openai</span> OpenAI Responses API</div>
-        <div><span class="badge badge-red">off</span> Returns empty curation (no headlines at all)</div>
+      <div class="sm-states" style="margin-top:8px">
+        <div class="sm-state" style="border-color:var(--orange)">ADMIN_SECRET set</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state">check ?secret= or cookie</div>
+        <span class="sm-arrow">→</span>
+        <div class="sm-state" style="border-color:var(--green)">Set-Cookie: ft_admin (30d)</div>
       </div>
+      <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">HttpOnly, SameSite=Lax. Protected: /api/admin/*, /api/day-signal.</p>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="schema">
   <h2><span class="num">05</span> Database Schema</h2>
-  <p class="subtitle">SQLite with WAL mode. 12 tables, schema version 2.</p>
+  <p class="subtitle">SQLite, WAL mode, schema version 2. 14 tables, 12 indices.</p>
 
   <div class="schema-grid">
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-blue">KV</span> meta</div>
-      <div class="cols">
-        <div><span class="pk">key TEXT PK</span></div>
-        <div>value TEXT</div>
-      </div>
+      <div class="cols"><div><span class="pk">key TEXT PK</span></div><div>value TEXT</div></div>
     </div>
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-green">SRC</span> sources</div>
       <div class="cols">
         <div><span class="pk">source_id TEXT PK</span></div>
-        <div>name, type, section, url</div>
-        <div>enabled, fetch_interval_minutes</div>
+        <div>name, type, section, url, enabled</div>
+        <div>fetch_interval_minutes</div>
         <div>last_fetched_at, last_error, last_status</div>
+        <div>last_item_count, meta_json</div>
       </div>
     </div>
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-green">INGEST</span> raw_items</div>
       <div class="cols">
         <div><span class="pk">raw_id INTEGER PK AUTO</span></div>
-        <div><span class="fk">source_id TEXT FK→sources</span></div>
-        <div>day, title, summary, canonical_url</div>
-        <div>fingerprint TEXT UNIQUE</div>
-        <div>published_at, payload_json</div>
+        <div><span class="fk">source_id → sources</span></div>
+        <div>day, fetched_at, published_at</div>
+        <div>canonical_url, title, summary</div>
+        <div>payload_json, section_hint</div>
+        <div>fingerprint TEXT <span class="pk">UNIQUE</span></div>
       </div>
     </div>
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-orange">SIGNAL</span> signals</div>
       <div class="cols">
         <div><span class="pk">signal_id INTEGER PK AUTO</span></div>
-        <div><span class="fk">raw_id INTEGER FK→raw_items</span></div>
+        <div><span class="fk">raw_id → raw_items</span></div>
         <div>day, section, signal_type, horizon_bucket</div>
-        <div>title, summary, canonical_url</div>
+        <div>title, published_at, summary, canonical_url</div>
         <div>entities_json, keywords_json, citations_json</div>
-        <div>score REAL, published_at</div>
-        <div style="color:var(--accent)">INDEX: (day, section)</div>
+        <div>score REAL</div>
+        <div style="color:var(--accent)">IDX: (day, section)</div>
       </div>
     </div>
     <div class="schema-table">
@@ -564,7 +544,7 @@
         <div>horizon_bucket, topic_slug</div>
         <div>evidence_signal_ids_json, evidence_links_json</div>
         <div>score REAL</div>
-        <div style="color:var(--accent)">UNIQUE: (day, topic_slug)</div>
+        <div style="color:var(--accent)">UQ: (day, topic_slug)</div>
       </div>
     </div>
     <div class="schema-table">
@@ -573,18 +553,17 @@
         <div><span class="pk">edition_id INTEGER PK AUTO</span></div>
         <div>day, years_forward, generated_at</div>
         <div>payload_json, version</div>
-        <div style="color:var(--accent)">UNIQUE: (day, years_forward)</div>
+        <div style="color:var(--accent)">UQ: (day, years_forward)</div>
       </div>
     </div>
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-purple">STORIES</span> edition_stories</div>
       <div class="cols">
         <div><span class="pk">story_id TEXT PK</span></div>
-        <div><span class="fk">edition_id INTEGER FK→editions</span></div>
+        <div><span class="fk">edition_id → editions</span></div>
         <div>section, rank, topic_id, angle</div>
-        <div>headline_seed, dek_seed</div>
-        <div>evidence_pack_json</div>
-        <div style="color:var(--accent)">UNIQUE: (edition_id, section, rank)</div>
+        <div>headline_seed, dek_seed, evidence_pack_json</div>
+        <div style="color:var(--accent)">UQ: (edition_id, section, rank)</div>
       </div>
     </div>
     <div class="schema-table">
@@ -592,8 +571,8 @@
       <div class="cols">
         <div><span class="pk">cache_key TEXT PK</span></div>
         <div>story_id, generated_at</div>
-        <div>article_json TEXT (~5KB/article)</div>
-        <div style="color:var(--accent)">INDEX: (story_id)</div>
+        <div>article_json (~5KB/article)</div>
+        <div style="color:var(--accent)">IDX: (story_id)</div>
       </div>
     </div>
     <div class="schema-table">
@@ -609,9 +588,24 @@
       <div class="cols">
         <div><span class="pk">story_id TEXT PK</span></div>
         <div>day, years_forward, section, rank</div>
-        <div>generated_at, model, key_story</div>
+        <div>generated_at, model, key_story INT</div>
         <div>plan_json, article_json</div>
-        <div style="color:var(--accent)">INDEX: (day), (day, years_forward)</div>
+        <div style="color:var(--accent)">IDX: (day), (day, years_forward)</div>
+      </div>
+    </div>
+    <div class="schema-table">
+      <div class="table-name"><span class="badge badge-blue">SNAP</span> day_signal_snapshots</div>
+      <div class="cols">
+        <div><span class="pk">day TEXT PK</span></div>
+        <div>generated_at, snapshot_json</div>
+      </div>
+    </div>
+    <div class="schema-table">
+      <div class="table-name"><span class="badge badge-blue">AUDIT</span> day_event_traces</div>
+      <div class="cols">
+        <div><span class="pk">event_id INTEGER PK AUTO</span></div>
+        <div>day, ts, event_type, payload_json</div>
+        <div style="color:var(--accent)">IDX: (day)</div>
       </div>
     </div>
     <div class="schema-table">
@@ -621,158 +615,188 @@
         <div>section, category, subcategory, label</div>
         <div>description, extrapolation_axes JSON</div>
         <div>keywords JSON, milestones JSON</div>
-        <div>enabled, created_at, updated_at</div>
+        <div>enabled INT, created_at, updated_at</div>
+        <div style="color:var(--accent)">IDX: (section), (enabled)</div>
       </div>
     </div>
     <div class="schema-table">
       <div class="table-name"><span class="badge badge-cyan">AI</span> topic_evidence</div>
       <div class="cols">
         <div><span class="pk">id INTEGER PK AUTO</span></div>
-        <div><span class="fk">standing_topic_key FK→standing_topics</span></div>
-        <div><span class="fk">signal_id FK→signals</span></div>
-        <div>day, relevance_score, matched_keywords</div>
-        <div>ai_category</div>
-        <div style="color:var(--accent)">UNIQUE: (standing_topic_key, signal_id)</div>
+        <div><span class="fk">standing_topic_key → standing_topics</span></div>
+        <div><span class="fk">signal_id → signals</span></div>
+        <div>day, relevance_score REAL</div>
+        <div>matched_keywords JSON, ai_category</div>
+        <div style="color:var(--accent)">UQ: (topic_key, signal_id)</div>
+        <div style="color:var(--accent)">IDX: (topic_key), (day), (topic_key, day)</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="api">
   <h2><span class="num">06</span> API Routes</h2>
-  <p class="subtitle">HTTP REST API served from server.js. Admin routes for curation, rendering, and diagnostics.</p>
+  <p class="subtitle">24+ HTTP routes from server.js. Admin routes protected by ADMIN_SECRET cookie auth.</p>
 
   <table>
     <thead><tr><th>Method</th><th>Route</th><th>Purpose</th><th>Auth</th></tr></thead>
     <tbody>
       <tr><td>GET</td><td><code>/api/ping</code></td><td>Health check</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/config</code></td><td>Current Opus/Spark config (mode, model, features)</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/config</code></td><td>Server config (opus mode, spark mode, features)</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/edition?years=&day=</code></td><td>Edition payload (stories, sections, hero)</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/article/:id?years=&day=</code></td><td>Article metadata + render status</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/day-signal?day=</code></td><td>Signal pack inspection (HTML or JSON)</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/pipeline/status</code></td><td>Pipeline health, last refresh, counts</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/pipeline/sources</code></td><td>Source list with last-fetch status</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/pipeline/standing-topics</code></td><td>Standing topics registry</td><td>—</td></tr>
+      <tr><td>GET/POST</td><td><code>/api/article/:id?years=&day=</code></td><td>GET: status. POST: start render job</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/pipeline/status</code></td><td>Pipeline health, counts, last refresh</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/pipeline/sources</code></td><td>All configured sources with status</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/pipeline/standing-topics</code></td><td>Standing topics registry (?section= filter)</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/pipeline/evidence-summary</code></td><td>Evidence summary for standing topics</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/pipeline/topic-evidence</code></td><td>Topic-signal evidence mapping</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/pipeline/topic-evidence</code></td><td>Signal-to-topic evidence mapping</td><td>—</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/day-signal?day=&format=</code></td><td>Signal pack (HTML/JSON/pretty)</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curate?force=</code></td><td>Trigger curation run</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET/PUT</td><td><code>/api/admin/curator/runtime</code></td><td>Read/update runtime Opus config</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/prerender</code></td><td>Pre-render articles for caching</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/daily</code></td><td>Force daily pipeline run</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET/POST</td><td><code>/api/admin/curator/runtime</code></td><td>Read/update Opus runtime config</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/prerender</code></td><td>Pre-render articles for cache warming</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/daily</code></td><td>Full pipeline refresh + curate</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/trace?day=</code></td><td>Event trace audit log</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/spark-request</code></td><td>Preview Spark request body</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/curation</code></td><td>View latest curation results</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/curation/preview</code></td><td>Preview curation prompt</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curation/apply</code></td><td>Apply curation to stories</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curation/override</code></td><td>Manual curation override</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/spark-request</code></td><td>Preview Spark request for a story</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/curation?years=</code></td><td>Curation details (HTML/JSON)</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/curation/preview</code></td><td>Preview curation prompt before LLM call</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curation/apply</code></td><td>Apply curation from custom prompt</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curation/override</code></td><td>Manual per-story curation override</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/dashboard</code></td><td>Full admin dashboard (HTML)</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/polymarket</code></td><td>Polymarket data explorer</td><td>admin</td></tr>
-      <tr><td>WS</td><td><code>/ws</code></td><td>Article render streaming</td><td>—</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/polymarket?years=</code></td><td>Polymarket implications explorer</td><td>admin</td></tr>
+      <tr><td>WS</td><td><code>/ws</code></td><td>Article render streaming protocol</td><td>—</td></tr>
     </tbody>
   </table>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="divider"></div>
+<div class="section" id="env">
+  <h2><span class="num">07</span> Environment Variables</h2>
+  <p class="subtitle">All configuration via env vars, with runtime.json persistence for Opus settings.</p>
+
+  <div class="env-grid">
+    <div class="env-card">
+      <h4>Server</h4>
+      <div class="env-row"><span class="env-key">HOST</span><span class="env-val">127.0.0.1</span></div>
+      <div class="env-row"><span class="env-key">PORT</span><span class="env-val">57965</span></div>
+      <div class="env-row"><span class="env-key">PORT_FALLBACK_STEP</span><span class="env-val">53 (increment on conflict)</span></div>
+      <div class="env-row"><span class="env-key">PORT_MAX_TRIES</span><span class="env-val">48</span></div>
+      <div class="env-row"><span class="env-key">ADMIN_SECRET</span><span class="env-val">(optional, enables auth)</span></div>
+      <div class="env-row"><span class="env-key">PIPELINE_DB_FILE</span><span class="env-val">data/future-times.sqlite</span></div>
+      <div class="env-row"><span class="env-key">PIPELINE_SOURCES_FILE</span><span class="env-val">config/sources.json</span></div>
+      <div class="env-row"><span class="env-key">PIPELINE_REFRESH_MS</span><span class="env-val">3600000 (1h)</span></div>
+    </div>
+    <div class="env-card">
+      <h4>Opus Curation</h4>
+      <div class="env-row"><span class="env-key">OPUS_MODE</span><span class="env-val">mock | anthropic | openai | off</span></div>
+      <div class="env-row"><span class="env-key">OPUS_MODEL</span><span class="env-val">claude-opus-4-6</span></div>
+      <div class="env-row"><span class="env-key">OPUS_API_KEY</span><span class="env-val">(Anthropic/OpenAI key)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_API_URL</span><span class="env-val">(custom endpoint)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_SYSTEM_PROMPT</span><span class="env-val">(override system prompt)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_MAX_TOKENS</span><span class="env-val">16000 (2K-32K)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_TIMEOUT_MS</span><span class="env-val">300000 (10s-600s)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_KEY_STORIES_PER_EDITION</span><span class="env-val">1 (0-7)</span></div>
+      <div class="env-row"><span class="env-key">OPUS_AUTO_CURATE</span><span class="env-val">true (curate after refresh)</span></div>
+    </div>
+    <div class="env-card">
+      <h4>Spark Rendering</h4>
+      <div class="env-row"><span class="env-key">SPARK_MODE</span><span class="env-val">mock | websocket</span></div>
+      <div class="env-row"><span class="env-key">SPARK_WS_URL</span><span class="env-val">(WebSocket endpoint)</span></div>
+      <div class="env-row"><span class="env-key">SPARK_HTTP_URL</span><span class="env-val">(HTTP endpoint, NYI)</span></div>
+      <div class="env-row"><span class="env-key">SPARK_AUTH_TOKEN</span><span class="env-val">(Bearer token)</span></div>
+      <div class="env-row"><span class="env-key">SPARK_AUTH_HEADER</span><span class="env-val">Authorization</span></div>
+      <div class="env-row"><span class="env-key">SPARK_AUTH_PREFIX</span><span class="env-val">Bearer</span></div>
+      <div class="env-row"><span class="env-key">SPARK_REQUEST_TIMEOUT_MS</span><span class="env-val">22000</span></div>
+      <div class="env-row"><span class="env-key">SPARK_FALLBACK_TO_MOCK</span><span class="env-val">true</span></div>
+      <div class="env-row"><span class="env-key">SPARK_MODEL</span><span class="env-val">codex-spark</span></div>
+    </div>
+    <div class="env-card">
+      <h4>Image Generation + Worker</h4>
+      <div class="env-row"><span class="env-key">OPENAI_API_KEY</span><span class="env-val">(DALL-E 3 image gen)</span></div>
+      <div class="env-row"><span class="env-key">PIPELINE_DAILY_HHMM</span><span class="env-val">05:30 (worker schedule)</span></div>
+      <div class="env-row"><span class="env-key">FUTURENEWS_RUNTIME_CONFIG_FILE</span><span class="env-val">~/.futurenews/runtime.json</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="llm">
-  <h2><span class="num">07</span> LLM Usage Detail</h2>
-  <p class="subtitle">Two LLM touchpoints: curation (batch, daily) and rendering (on-click, streaming). Both default to mock.</p>
+  <h2><span class="num">08</span> LLM Usage Detail</h2>
+  <p class="subtitle">Three LLM touchpoints: curation (batch, daily), rendering (on-click, streaming), image generation (per-story). All default to mock.</p>
 
-  <div class="cards" style="grid-template-columns: 1fr 1fr;">
+  <div class="cards" style="grid-template-columns: 1fr 1fr 1fr;">
     <div class="card" style="border-color:var(--purple)">
-      <h3><span class="badge badge-purple">CURATION</span> Opus 4.6 (Anthropic/OpenAI)</h3>
-      <p style="margin-bottom:12px">Single batch call per edition. Rewrites all story headlines, composes deks, prewrites key stories.</p>
-      <table>
-        <tr><td>API</td><td><code>POST /v1/messages</code> (Anthropic) or <code>/v1/responses</code> (OpenAI)</td></tr>
-        <tr><td>Temperature</td><td><code>0.4</code></td></tr>
-        <tr><td>Max tokens</td><td><code>16,000</code> (configurable 2K-32K)</td></tr>
-        <tr><td>Timeout</td><td><code>300s</code> (5 min)</td></tr>
-        <tr><td>Fallback</td><td>Opus → Sonnet 4.5 → Haiku 4.5 (model 404 only)</td></tr>
-        <tr><td>System prompt</td><td>"You are Opus 4.6 acting as a high-quality daily trend curator. Return JSON only."</td></tr>
+      <h3><span class="badge badge-purple">CURATION</span> Anthropic API</h3>
+      <p style="margin-bottom:12px">1 batch call per edition. All ~20 stories curated at once.</p>
+      <table style="font-size:12px;">
+        <tr><td>API</td><td><code>POST /v1/messages</code></td></tr>
+        <tr><td>Model</td><td>claude-opus-4-6 (configurable)</td></tr>
+        <tr><td>Temperature</td><td>0.4</td></tr>
+        <tr><td>Max tokens</td><td>16,000 (2K-32K)</td></tr>
+        <tr><td>Timeout</td><td>300s</td></tr>
+        <tr><td>Fallback</td><td>Opus → Sonnet → Haiku</td></tr>
       </table>
-
-      <h4 style="margin-top:16px; font-size:13px; color:var(--accent);">Prompt Structure</h4>
-      <div style="font-size:12px; font-family:var(--mono); color:var(--fg-muted); margin-top:8px; line-height:1.7;">
-        <div>├─ Editorial instructions (~450 tokens)</div>
-        <div>├─ Critical rules: write predictions not anniversaries (~600 tokens)</div>
-        <div>├─ AI extrapolation axes &amp; milestones (~300 tokens)</div>
-        <div>├─ JSON schema definition (~100 tokens)</div>
-        <div>├─ Story candidates × ~20 (~1,500 tokens)</div>
-        <div>│   ├─ storyId, section, rank</div>
-        <div>│   ├─ topic label + brief</div>
-        <div>│   └─ citations (2 per story)</div>
-        <div>└─ <strong>Total input: ~3,000-3,500 tokens</strong></div>
-      </div>
-
-      <h4 style="margin-top:16px; font-size:13px; color:var(--accent);">Response Structure (JSON)</h4>
-      <div style="font-size:12px; font-family:var(--mono); color:var(--fg-muted); margin-top:8px; line-height:1.7;">
-        <div>├─ stories[] (~20 items)</div>
-        <div>│   ├─ curatedTitle, curatedDek, sparkDirections</div>
-        <div>│   ├─ topicTitle, futureEventSeed</div>
-        <div>│   ├─ key, hero booleans</div>
-        <div>│   └─ draftArticle (key stories only: title + dek + body)</div>
-        <div>├─ keyStoryIds[]</div>
-        <div>└─ <strong>Total output: ~2,500-7,000 tokens</strong></div>
+      <div style="font-size:11px; margin-top:12px; color:var(--fg-muted);">
+        <strong>Input (~3,000-3,500 tokens):</strong> editorial instructions, prediction rules, AI extrapolation axes, story candidates with citations<br>
+        <strong>Output (~2,500-7,000 tokens):</strong> curatedTitle, curatedDek, sparkDirections, futureEventSeed per story, draftArticle for key stories
       </div>
     </div>
 
     <div class="card" style="border-color:var(--pink)">
-      <h3><span class="badge badge-pink">RENDERING</span> Spark WS Provider</h3>
-      <p style="margin-bottom:12px">On-click article generation via external WebSocket. Not a direct LLM API call from this codebase — Spark is a black-box provider.</p>
-      <table>
-        <tr><td>Protocol</td><td>WebSocket (<code>SPARK_WS_URL</code>)</td></tr>
-        <tr><td>Timeout</td><td><code>22s</code></td></tr>
-        <tr><td>Auth</td><td>Bearer token via <code>SPARK_AUTH_TOKEN</code></td></tr>
-        <tr><td>Fallback</td><td>Mock renderer (deterministic template body)</td></tr>
-        <tr><td>Model</td><td><code>SPARK_MODEL</code> env (default: "codex-spark")</td></tr>
+      <h3><span class="badge badge-pink">RENDERING</span> Spark WS</h3>
+      <p style="margin-bottom:12px">On-click via external WebSocket. Streams body chunks to client.</p>
+      <table style="font-size:12px;">
+        <tr><td>Protocol</td><td>WebSocket</td></tr>
+        <tr><td>Model</td><td>codex-spark (configurable)</td></tr>
+        <tr><td>Timeout</td><td>22s</td></tr>
+        <tr><td>Auth</td><td>Bearer token</td></tr>
+        <tr><td>Fallback</td><td>Mock renderer</td></tr>
       </table>
-
-      <h4 style="margin-top:16px; font-size:13px; color:var(--accent);">Request Payload</h4>
-      <div style="font-size:12px; font-family:var(--mono); color:var(--fg-muted); margin-top:8px; line-height:1.7;">
-        <div>├─ type: "render.article"</div>
-        <div>├─ instructions (~500 tokens)</div>
-        <div>│   ├─ "Write as if published on [editionDate]"</div>
-        <div>│   ├─ Critical rules (no anniversary framing)</div>
-        <div>│   └─ Curator plan (topicTitle, sparkDirections, futureEventSeed)</div>
-        <div>├─ evidencePack (citations, markets, econ)</div>
-        <div>├─ constraints (grounding, narrative rules)</div>
-        <div>└─ article seed (title, dek, initial body)</div>
+      <div style="font-size:11px; margin-top:12px; color:var(--fg-muted);">
+        <strong>Request:</strong> instructions (~500 tokens) + evidence pack + curation plan + constraints<br>
+        <strong>Mock:</strong> 5 section-specific paragraph templates (lede, context, impact, debate, next) with 140-240ms simulated streaming
       </div>
+    </div>
 
-      <h4 style="margin-top:16px; font-size:13px; color:var(--accent);">Mock Renderer (Default)</h4>
-      <div style="font-size:12px; color:var(--fg-muted); margin-top:8px;">
-        <p>When SPARK_MODE=mock, articles are built from deterministic templates:</p>
-        <ul style="padding-left:16px; margin-top:4px;">
-          <li>If Opus provided a draftArticle body → use directly</li>
-          <li>If Opus provided sparkDirections + futureEventSeed → build from those</li>
-          <li>Otherwise → section-specific template paragraphs (lede, context, impact, debate, next)</li>
-        </ul>
-        <p style="margin-top:8px">Simulates streaming with 140-240ms delays between 740-byte chunks.</p>
+    <div class="card" style="border-color:var(--yellow)">
+      <h3><span class="badge badge-yellow">IMAGES</span> DALL-E 3</h3>
+      <p style="margin-bottom:12px">Hero image generation per story. Cached to filesystem.</p>
+      <table style="font-size:12px;">
+        <tr><td>API</td><td><code>POST /v1/images/generations</code></td></tr>
+        <tr><td>Model</td><td>dall-e-3</td></tr>
+        <tr><td>Size</td><td>1792 × 1024</td></tr>
+        <tr><td>Quality</td><td>standard</td></tr>
+        <tr><td>Timeout</td><td>60s gen + 30s download</td></tr>
+        <tr><td>Cache</td><td>assets/img/generated/{storyId}.png</td></tr>
+      </table>
+      <div style="font-size:11px; margin-top:12px; color:var(--fg-muted);">
+        Requires <code>OPENAI_API_KEY</code>. Generated once per storyId, never regenerated.
       </div>
     </div>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════════════ -->
+<!-- ═══════════════════════════════════════════ -->
 <div class="divider"></div>
 <div class="section" id="costs">
-  <h2><span class="num">08</span> LLM Cost Estimates</h2>
-  <p class="subtitle">Based on Anthropic pricing: Opus 4.6 = $15/M input, $75/M output. Haiku 4.5 = $1/M input, $5/M output.</p>
+  <h2><span class="num">09</span> LLM Cost Estimates</h2>
+  <p class="subtitle">Opus 4.6: $15/M input, $75/M output. Sonnet 4.5: $3/M, $15/M. Haiku 4.5: $1/M, $5/M. DALL-E 3: $0.08/image (standard, 1792×1024).</p>
 
-  <h3 style="margin-top:24px; font-size:15px;">Per Curation Call (Opus 4.6)</h3>
+  <h3>Per Curation Call (Opus 4.6)</h3>
   <table style="max-width:700px;">
     <thead><tr><th>Component</th><th>Tokens</th><th>Cost</th></tr></thead>
     <tbody>
-      <tr><td>Input (prompt + candidates)</td><td>~3,200</td><td>$0.048</td></tr>
-      <tr><td>Output (20 stories, metadata)</td><td>~1,600</td><td>$0.120</td></tr>
+      <tr><td>Input (prompt + candidates + axes)</td><td>~3,200</td><td>$0.048</td></tr>
+      <tr><td>Output (20 stories metadata)</td><td>~1,600</td><td>$0.120</td></tr>
       <tr><td>Output (1 key story prewrite)</td><td>~1,200</td><td>$0.090</td></tr>
       <tr style="font-weight:700"><td>Total per call</td><td>~6,000</td><td>~$0.26</td></tr>
     </tbody>
   </table>
 
-  <h3 style="margin-top:32px; font-size:15px;">Monthly Cost Scenarios</h3>
+  <h3>Monthly Cost Scenarios</h3>
 
   <div class="cost-row">
     <div class="cost-label">Mock (default)</div>
@@ -781,69 +805,61 @@
   </div>
   <div class="cost-row">
     <div class="cost-label">1 edition/day (Opus)</div>
-    <div class="cost-bar-bg"><div class="cost-bar" style="width:8%; background:var(--accent);">$7.80</div></div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:4%; background:var(--accent);">$7.80</div></div>
     <div class="cost-val">~$7.80/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">All 11 years/day</div>
-    <div class="cost-bar-bg"><div class="cost-bar" style="width:40%; background:var(--orange);">$85.80</div></div>
-    <div class="cost-val">~$85.80/mo</div>
+    <div class="cost-label">11 years/day (Opus)</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:22%; background:var(--orange);">$85.80</div></div>
+    <div class="cost-val">~$86/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">11 years + 7 keys each</div>
-    <div class="cost-bar-bg"><div class="cost-bar" style="width:70%; background:var(--red);">$150</div></div>
+    <div class="cost-label">11yr + 7 keys each</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:38%; background:var(--red);">$150</div></div>
     <div class="cost-val">~$150/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">Sonnet 4.5 fallback</div>
-    <div class="cost-bar-bg"><div class="cost-bar" style="width:15%; background:var(--purple);">$16</div></div>
+    <div class="cost-label">DALL-E 3 (40 imgs/day)</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:25%; background:var(--yellow);">$96</div></div>
+    <div class="cost-val">~$96/mo</div>
+  </div>
+  <div class="cost-row">
+    <div class="cost-label">Spark render (50/day Haiku)</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:10%; background:var(--pink);">$30</div></div>
+    <div class="cost-val">~$30/mo</div>
+  </div>
+  <div class="cost-row">
+    <div class="cost-label" style="color:var(--fg)"><strong>Full production max</strong></div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:90%; background:linear-gradient(90deg, var(--purple), var(--red), var(--yellow));">$362</div></div>
+    <div class="cost-val"><strong>~$362/mo</strong></div>
+  </div>
+  <div class="cost-row">
+    <div class="cost-label">Sonnet-only curation</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:5%; background:var(--purple);">$16</div></div>
     <div class="cost-val">~$16/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">Haiku 4.5 fallback</div>
-    <div class="cost-bar-bg"><div class="cost-bar" style="width:3%; background:var(--cyan);">$2</div></div>
+    <div class="cost-label">Haiku-only curation</div>
+    <div class="cost-bar-bg"><div class="cost-bar" style="width:1%; background:var(--cyan);">$2</div></div>
     <div class="cost-val">~$2/mo</div>
   </div>
 
-  <div style="margin-top:24px; font-size:12px; color:var(--fg-muted);">
-    <strong>Note:</strong> Spark rendering costs are external and usage-dependent (per-click).
-    At 50 clicks/day with a Haiku-class model: ~$15-45/mo additional.
-    Mock mode: $0. Total production budget: <strong>$20-200/mo</strong> depending on model and usage.
-  </div>
-
-  <h3 style="margin-top:32px; font-size:15px;">Key Design Decisions (Cost Optimization)</h3>
-  <div class="cards" style="margin-top:12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
-    <div class="card">
-      <h3 style="font-size:13px;">Mock-first default</h3>
-      <p>Everything works with zero API calls. LLM is opt-in, not required.</p>
-    </div>
-    <div class="card">
-      <h3 style="font-size:13px;">Batch curation</h3>
-      <p>All ~20 stories curated in 1 API call, not 20 separate calls. Massive token savings.</p>
-    </div>
-    <div class="card">
-      <h3 style="font-size:13px;">Curation ≠ Rendering</h3>
-      <p>Opus writes editorial direction (sparkDirections). A fast/cheap model renders on-click.</p>
-    </div>
-    <div class="card">
-      <h3 style="font-size:13px;">Three-layer cache</h3>
-      <p>In-memory Map → SQLite render_cache → localStorage. Avoids re-rendering clicked articles.</p>
-    </div>
-    <div class="card">
-      <h3 style="font-size:13px;">Model fallback chain</h3>
-      <p>Opus → Sonnet → Haiku on model-not-found. Graceful degradation without user intervention.</p>
-    </div>
-    <div class="card">
-      <h3 style="font-size:13px;">Deterministic templates</h3>
-      <p>Section-specific template paragraphs for mock rendering. Seed-based stable selection (reproducible).</p>
-    </div>
+  <h3>Cost Optimization Design</h3>
+  <div class="cards" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+    <div class="card"><h3 style="font-size:13px;">Mock-first default</h3><p>All 3 LLM touchpoints default to mock. Zero API calls out of the box.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Batch curation</h3><p>~20 stories in 1 API call, not 20 separate calls.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Curation ≠ Rendering</h3><p>Opus writes sparkDirections. Cheap model renders on-click.</p></div>
+    <div class="card"><h3 style="font-size:13px;">3-layer render cache</h3><p>Memory Map → SQLite → localStorage. Never re-render.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Model fallback chain</h3><p>Opus → Sonnet → Haiku on 404. Graceful degradation.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Image dedup</h3><p>DALL-E images cached per storyId, never regenerated.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Deterministic mock</h3><p>584-line opus-curator.js generates rich mock curations with outlines, traces, rationale.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Runtime config hot-swap</h3><p>Switch models/modes via admin API without restart.</p></div>
   </div>
 </div>
 
 <div style="height:80px;"></div>
 
 <script>
-  // Highlight active nav section on scroll
   const sections = document.querySelectorAll('.section[id]');
   const navLinks = document.querySelectorAll('nav a');
   const observer = new IntersectionObserver((entries) => {
