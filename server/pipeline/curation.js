@@ -29,7 +29,7 @@ export function getOpusCurationConfigFromEnv() {
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 1, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 16000, 2000, 32000);
-  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 300000, 10000, 600000);
+  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 600000, 10000, 900000);
   const apiKey = apiKeyEnv || apiKeyStored;
   const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
   const systemPrompt =
