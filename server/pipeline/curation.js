@@ -28,7 +28,7 @@ export function getOpusCurationConfigFromEnv() {
   const modelDefault = mode === 'anthropic' ? 'claude-sonnet-4-5-20250929' : 'claude-sonnet-4-5-20250929';
   const model = String(process.env.OPUS_MODEL || stored.model || modelDefault).trim() || modelDefault;
 
-  const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 1, 0, 7);
+  const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 32000, 4000, 64000);
   // Timeout must fit within Vercel's 300s function limit
   const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 250000, 10000, 280000);
@@ -92,8 +92,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       .map((s) => `- ${String(s.title || '').slice(0, 160)} (${String(s.source || '').slice(0, 40)})`)
       .join('\n');
 
-  // Cap candidates to top 12 — each gets a full article from the LLM
-  const cappedCandidates = (candidates || []).slice(0, 12);
+  // Cap candidates to top 8 to keep prompt small enough for Vercel 300s limit
+  const cappedCandidates = (candidates || []).slice(0, 8);
   const candidateLines = cappedCandidates
     .map((c) => {
       const topic = c.topic || {};
@@ -155,7 +155,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
-    `- For EVERY story: write a full draftArticle with body (~4-6 paragraphs, NYT-style narrative). No story should have draftArticle:null.`,
+    `- For KEY stories ONLY: write a full draftArticle with body (~3-4 paragraphs, NYT-style narrative).`,
+    `- For NON-KEY stories: set draftArticle to null. A fast model will generate articles on demand using sparkDirections.`,
     `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
@@ -194,8 +195,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- confidence: integer 0-100 rating the plausibility of this prediction.`,
     aiExtrapolationBlock,
     `JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":false,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"}}]}`,
-    `EVERY story must have a draftArticle with title, dek, and body (4-6 paragraphs). No story should have draftArticle:null.`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string or null for non-key stories"}}]}`,
+    `KEY stories must have a draftArticle with title, dek, and body (3-4 paragraphs). Non-key stories should have draftArticle:null — they will be generated on demand.`,
     ``,
     ``,
     `Story candidates (must use these storyIds exactly):`,
