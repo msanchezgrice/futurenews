@@ -19,7 +19,7 @@ function normalizeMode(value) {
 export function getOpusCurationConfigFromEnv() {
   const stored = readOpusRuntimeConfig() || {};
   const modeRaw = String(process.env.OPUS_MODE || stored.mode || '').trim();
-  const apiKeyEnv = String(process.env.OPUS_API_KEY || '').trim();
+  const apiKeyEnv = String(process.env.OPUS_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
   const apiKeyStored = String(stored.apiKey || '').trim();
   const hasKey = Boolean(apiKeyEnv || apiKeyStored);
   const mode = normalizeMode(modeRaw || (hasKey ? 'anthropic' : 'mock'));
@@ -448,8 +448,8 @@ export async function generateEditionCurationPlan(input) {
   }
 
   const keyCount = clampInt(input?.keyCount ?? config.keyStoriesPerEdition, 1, 0, 7);
-  if (mode === 'mock') {
-    return mockCuration({ ...input, keyCount });
+  if (mode === 'mock' || mode === 'off' || mode === 'disabled') {
+    throw new Error(`OPUS_MODE="${mode}" — mock curation removed. Set OPUS_MODE=anthropic with a valid API key.`);
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
