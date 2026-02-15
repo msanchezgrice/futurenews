@@ -518,6 +518,14 @@
     if (!payload) return;
     setText('editionDate', payload.date || '—');
     setText('generatedFrom', payload.generatedFrom || '—');
+    // Show current Central Time
+    const timeEl = document.getElementById('editionTime');
+    if (timeEl) {
+      try {
+        const ct = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short' });
+        timeEl.textContent = ct;
+      } catch { timeEl.textContent = ''; }
+    }
     const notes = document.getElementById('notes');
     if (notes) {
       const signalDay = normalizeDay(payload.day || '');

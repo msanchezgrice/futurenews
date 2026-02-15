@@ -154,23 +154,37 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- For every story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" a fast model can use to write the article.`,
     `- For key stories ONLY: also write a draftArticle with body (~4 paragraphs, NYT-style).`,
     ``,
-    `CRITICAL — WRITE PREDICTIONS, NOT ANNIVERSARIES:`,
+    `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
     `- Output STRICT JSON only. No markdown code fences, no commentary before/after the JSON.`,
     `- You are a journalist in ${editionDate}. Write as if the edition is published on ${editionDate}. Do not mention forecasts, simulations, projections, or that you are an AI.`,
-    `- MOST IMPORTANT: Every headline and story must be about a PLAUSIBLE FUTURE OUTCOME in ${editionDate}. NOT about today's news.`,
-    `- The baseline signals from ${day} are BACKGROUND CONTEXT that informs your understanding of the TOPIC DOMAIN (e.g., AI policy, trade relations, tech industry). They are NOT the story itself.`,
-    `- DO NOT write anniversary-style stories ("How X Reshaped Y", "The Legacy of Z", "X Years After [headline]"). These are lazy and uninteresting.`,
-    `- DO NOT write about today's specific minor news events as if they're important enough to remember years from now. Most won't be.`,
-    `- INSTEAD: Use the baseline signals to understand what DOMAIN/TREND is active, then write a credible, specific prediction about where that domain ends up by ${editionDate}.`,
-    `- Good example: If today's signal is "Anthropic raises $30bn", the ${editionDate} story should be about the AI industry landscape in that year (e.g., "AI Infrastructure Spending Hits $2 Trillion as Custom Chips Reshape Industry").`,
-    `- Bad example: "How Anthropic's $30bn Round Reshaped the AI Industry" (anniversary framing of a specific event).`,
+    ``,
+    `YOUR #1 JOB: Read each baseline signal carefully. Identify what DOMAIN or TREND it signals. Then write a specific, plausible news story about that domain in ${editionDate}.`,
+    ``,
+    `HOW TO EXTRAPOLATE FROM A SIGNAL:`,
+    `1. READ the actual news story content — look for dates, deadlines, completion targets, funding amounts, election dates, policy timelines, project milestones.`,
+    `2. EXTRAPOLATE forward ${yearsForward} years: what plausibly happens by ${editionDate}? A construction project completes. A policy takes effect. A company's trajectory plays out. A technology matures.`,
+    `3. WRITE IT AS NEWS: "White House Ballroom Opens After $200M Renovation" not "How Renderings of Trump's Ballroom Reshaped Architecture."`,
+    ``,
+    `Example of GOOD extrapolation:`,
+    `- Baseline: "Renderings show vision for Trump's White House ballroom" (2026) → Story for 2029: "White House Grand Ballroom Opens to Mixed Reviews After Three-Year Renovation"`,
+    `- Baseline: "Anthropic raises $30bn at $380bn valuation" (2026) → Story for 2031: "Anthropic Passes $2 Trillion Valuation as Enterprise AI Revenue Crosses $100B"`,
+    `- Baseline: "EU leaders agree to Buy European policy" (2026) → Story for 2028: "EU's Buy European Act Reshapes Defense Procurement as Spending Hits Record €400B"`,
+    ``,
+    `NEVER DO THIS:`,
+    `- "How X Reshaped Y" (anniversary framing)`,
+    `- "X Years After [headline]" (backward-looking)`,
+    `- "The Legacy of Z" (memorial tone)`,
+    `- Stories about minor/trivial events that nobody would remember in ${yearsForward} years`,
+    `- Generic filler like "The Quiet Shift in [topic]" or "A New Framework for [topic]"`,
+    ``,
+    `RULES:`,
     `- curatedTitle/curatedDek must describe an ORIGINAL future event/outcome in the target year. Be specific: use numbers, company names, policy names, concrete outcomes.`,
     `- Prediction markets are inputs: infer the most likely outcome and report that outcome as what happened (do not pose the story as a question).`,
     `- Set exactly ONE hero story by setting hero:true for a single storyId (usually one of the keyStoryIds).`,
     `- Do not output question headlines.`,
     `- topicTitle should be a short stable tag (2-6 words) that captures the underlying DOMAIN/TREND (not the specific baseline event).`,
     `- futureEventSeed must be a single declarative sentence describing what happened in ${editionDate} (usable as the lede). It should read like real news from that date.`,
-    `- Keep sparkDirections short but concrete (who/what happened/what changed in the target year).`,
+    `- sparkDirections must tell Codex Spark WHAT HAPPENED in ${editionDate} — be specific: who did what, what number changed, what policy passed, what product launched. Spark will write the article from these directions.`,
     `- For AI section stories: use the extrapolation axes to make specific, quantitative predictions. Mention speed/capability numbers, adoption percentages, cost figures where plausible.`,
     `- For non-key (secondary) stories: it is OK to keep curatedDek very short; focus on topicTitle + sparkDirections so Codex Spark can draft on click.`,
     `- For draftArticle.body: narrative paragraphs only (NYT-style), no section headings, written as real journalism from ${editionDate}. End with a short "Sources" list (4-8 links).`,
@@ -409,32 +423,31 @@ function mockCuration({ day, yearsForward, editionDate, candidates, keyCount }) 
     const key = keyStoryIds.includes(c.storyId);
     const topicLabel = String((c.topic && c.topic.label) || c.topicLabel || c.title || '').replace(/\s+/g, ' ').trim();
     const shortTopic = topicLabel.length > 80 ? topicLabel.slice(0, 80).replace(/\s+\S*$/, '').trim() : topicLabel;
-    const futureEventSeed = `By ${editionDate}, the story that began with "${shortTopic}" in ${baselineYear} has reached a decisive turning point.`;
+    const futureEventSeed = `In ${targetYear}, the domain of ${shortTopic} has reached a new inflection point.`;
     const outline = [
-      `Lead: what happened by ${targetYear}, anchored in ${shortTopic}`,
-      `How it traces back to ${baselineYear} baseline signals`,
-      'Who won/lost; operational details and constraints',
+      `What concretely happened in ${targetYear} around ${shortTopic}`,
+      'Key players, policies, or technologies involved',
+      'Measurable outcomes or consequences',
       'What comes next'
     ];
     const extrapolationTrace = [
-      `Baseline (${baselineYear}): ${topicLabel.slice(0, 140)}`,
-      `Bridge: institutions adapt + incentives shift over ${Math.max(1, Number(yearsForward) || 0)} years`,
-      `Outcome: a specific, reportable event by ${editionDate}`
+      `Baseline signal (${baselineYear}): ${topicLabel.slice(0, 140)}`,
+      `Extrapolate: what plausibly happens to this domain over ${Math.max(1, Number(yearsForward) || 0)} years`,
+      `Write a specific news report from ${editionDate}`
     ];
     const rationale = [
-      'High signal density in baseline evidence',
-      'Clear path to a concrete future outcome',
-      'Likely to attract reader attention in the section'
+      'Topic has clear trajectory for extrapolation',
+      'Domain is important enough to matter in the target year'
     ];
     const sparkDirections = [
-      `Write as if published on ${editionDate}.`,
-      `The topic is: ${shortTopic}.`,
-      `Treat baseline citations as the historical record from ${day}.`,
-      `Invent a specific future outcome that resolves the uncertainty around this topic (no hedging).`
+      `You are a journalist in ${targetYear}. Write a news article published on ${editionDate}.`,
+      `Topic domain: ${shortTopic}.`,
+      `The baseline signals from ${day} are CONTEXT ONLY — do NOT write about them directly or as anniversaries.`,
+      `Write about a SPECIFIC plausible outcome in ${targetYear}: what policy passed, what technology shipped, what market shifted.`,
+      `Be concrete: use numbers, names, specific outcomes. No hedging, no "could" or "might".`
     ].join(' ');
-    // Build a meaningful mock headline from the topic label
-    const mockTitle = `${shortTopic}, ${targetYear}: What Changed`;
-    const mockDek = `The signals from ${baselineYear} around ${shortTopic} have matured into policy, markets, and daily life by ${editionDate}.`;
+    const mockTitle = c.curatedTitle || shortTopic;
+    const mockDek = c.curatedDek || `A ${targetYear} report on ${shortTopic.toLowerCase()}.`;
     return {
       storyId: c.storyId,
       curatedTitle: mockTitle,
@@ -458,7 +471,7 @@ function mockCuration({ day, yearsForward, editionDate, candidates, keyCount }) 
     editionDate,
     generatedAt: isoNow(),
     model: 'mock-curator',
-    editionThesis: `By ${editionDate}, the baseline themes from ${day} have hardened into day-to-day operations and policy.`,
+    editionThesis: `Edition for ${editionDate}. Opus curation was not available; stories use Spark rendering on click.`,
     thinkingTrace: [
       'Prioritized stories with the clearest baseline-to-outcome bridge',
       'Chose a hero story that is broad, narrative, and easy to visualize',

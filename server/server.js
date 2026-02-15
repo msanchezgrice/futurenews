@@ -10,7 +10,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { FutureTimesPipeline } from './pipeline/pipeline.js';
 import { clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
-import { getRuntimeConfigInfo, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
+import { getRuntimeConfigInfo, readRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +34,67 @@ const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
+
+// ── Admin auth ──
+// Check env, then runtime config
+const _envAdminSecret = process.env.ADMIN_SECRET || process.env.FT_ADMIN_SECRET || '';
+const ADMIN_SECRET = _envAdminSecret || (() => {
+  try {
+    const cfg = readRuntimeConfig();
+    return cfg && typeof cfg === 'object' ? String(cfg.adminSecret || '') : '';
+  } catch { return ''; }
+})();
+const ADMIN_COOKIE_NAME = 'ft_admin';
+const ADMIN_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+
+function checkAdminAuth(req, url) {
+  if (!ADMIN_SECRET) return true; // no secret configured = open access (local dev)
+  // Check query param
+  const qsSecret = url.searchParams.get('secret') || '';
+  if (qsSecret === ADMIN_SECRET) return 'set-cookie'; // valid, set cookie
+  // Check cookie
+  const cookies = String(req.headers.cookie || '');
+  const match = cookies.match(new RegExp(`(?:^|;)\\s*${ADMIN_COOKIE_NAME}=([^;]+)`));
+  if (match && match[1] === ADMIN_SECRET) return true;
+  return false;
+}
+
+function sendAdminLogin(res) {
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Admin Login - The Future Times</title>
+<style>
+  body{font-family:-apple-system,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9f9f9}
+  .box{background:#fff;border:1px solid #ddd;border-radius:8px;padding:32px;max-width:360px;width:100%;text-align:center}
+  h1{font-size:18px;margin:0 0 16px}
+  input{width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;font-size:14px;box-sizing:border-box;margin-bottom:12px}
+  button{width:100%;padding:10px;background:#111;color:#fff;border:none;border-radius:4px;font-size:14px;cursor:pointer}
+  button:hover{background:#333}
+  .err{color:#c62828;font-size:13px;margin-top:8px;display:none}
+</style></head><body>
+<div class="box">
+  <h1>The Future Times — Admin</h1>
+  <form id="f">
+    <input type="password" id="s" placeholder="Admin password" autofocus/>
+    <button type="submit">Sign in</button>
+    <div class="err" id="e">Invalid password</div>
+  </form>
+</div>
+<script>
+document.getElementById('f').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var s = document.getElementById('s').value.trim();
+  if (!s) return;
+  var url = new URL(location.href);
+  url.searchParams.set('secret', s);
+  location.href = url.toString();
+});
+// Show error if redirected back with bad secret
+if (location.search.includes('auth=failed')) document.getElementById('e').style.display='block';
+</script></body></html>`;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
 
 const mimeByExt = new Map([
   ['.html', 'text/html; charset=utf-8'],
@@ -319,7 +380,7 @@ function buildForecastBody(story) {
       lines.push(sparkDirections);
       lines.push('');
     }
-    lines.push(`Full article will render when opened. Click to read the complete ${targetYear} report.`);
+    // No placeholder text - the spark directions + event seed ARE the article body until Spark renders
     if (sourceLines.length) {
       lines.push('');
       lines.push('Sources');
@@ -329,190 +390,42 @@ function buildForecastBody(story) {
     return lines.join('\n');
   }
 
-  // ── PREDICTION-FORWARD FALLBACK BODY ──
-  // This generates a plausible future news article about the TOPIC/DOMAIN,
-  // NOT an anniversary piece about today's specific headline.
+  // ── MINIMAL FALLBACK: no Opus draft and no sparkDirections ──
+  // Just show sources. Codex Spark will write the real article on click.
+  const targetYear = Number(baselineYear) + yearsForward;
+  const fallbackLines = [];
 
-  const anchor = citations[0] || null;
-  const anchorTitle = stripAuthorSuffix(anchor?.title || topic.label || '');
-
-  let theme = String(topic.theme || '').trim();
-  if (!theme) {
-    theme = cleanTheme(topic.label || anchorTitle) || cleanTheme(anchorTitle) || 'a major shift';
-  }
-  theme = String(theme || '')
-    .split(/[.?!:;]+/)[0]
-    .replace(/["""]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  const copula = theme.match(/^(.+?)\s+(?:was|is|are|were|has been|have been)\s+/i);
-  if (copula) {
-    theme = String(copula[1] || '').trim();
-  }
-  if (theme.length > 92) {
-    theme = theme.slice(0, 92).replace(/[,\s;:.]+$/g, '').trim();
-  }
-  if (!theme) theme = 'a major shift';
-
-  const baselineYearNum = Number(baselineYear);
-  const targetYear = Number.isFinite(baselineYearNum) ? String(baselineYearNum + yearsForward) : '';
-
-  const defaultDatelineBySection = {
-    'U.S.': ['Washington', 'New York', 'Chicago', 'Atlanta', 'Phoenix', 'Austin'],
-    World: ['Geneva', 'London', 'Brussels', 'Beijing', 'Nairobi', 'New Delhi'],
-    Business: ['New York', 'London', 'Frankfurt', 'Singapore'],
-    Technology: ['San Francisco', 'Seattle', 'Austin', 'Shenzhen'],
-    AI: ['San Francisco', 'London', 'Beijing', 'Seattle', 'Austin'],
-    Arts: ['New York', 'Los Angeles', 'London', 'Paris'],
-    Lifestyle: ['Los Angeles', 'Miami', 'Brooklyn', 'Austin'],
-    Opinion: ['New York', 'Washington']
-  };
-  const fallbackPlaces = defaultDatelineBySection[story.section] || ['New York'];
-  const placeHint = extractPlaceHint(`${anchorTitle} ${String(anchor?.summary || '')}`) || '';
-  const hintMatch = fallbackPlaces.find((p) => String(p).toLowerCase() === String(placeHint || '').toLowerCase()) || '';
-  const dateline = hintMatch || pickStable(fallbackPlaces, `${seed}|dateline`) || '';
-  const datelinePrefix = dateline ? `${dateline} — ` : '';
-
-  // ── Build a prediction-forward lede (NOT anniversary) ──
-  let lede;
   if (futureEventSeedRaw) {
-    const clipped = futureEventSeedRaw.length > 260 ? futureEventSeedRaw.slice(0, 260).replace(/[,\s;:.]+$/g, '').trim() : futureEventSeedRaw;
-    const punct = /[.?!]$/.test(clipped) ? '' : '.';
-    lede = `${datelinePrefix}${clipped}${punct}`.trim();
-  } else {
-    // Generate a forward-looking lede about the topic domain
-    const ledeBySection = {
-      'U.S.': [
-        () => `${datelinePrefix}The policy landscape around ${theme} has shifted decisively, with new legislation and court rulings redefining how the government approaches the issue in ${targetYear}.`,
-        () => `${datelinePrefix}After years of incremental change, ${targetYear} has become the year the political consensus on ${theme} crystallized into concrete action.`
-      ],
-      World: [
-        () => `${datelinePrefix}A new international accord on ${theme} has reshaped global cooperation, as nations grapple with consequences that have intensified far beyond what analysts projected.`,
-        () => `${datelinePrefix}The geopolitical dynamics around ${theme} have entered a new phase in ${targetYear}, with shifting alliances and economic pressures forcing a recalibration across capitals.`
-      ],
-      Business: [
-        () => `${datelinePrefix}The business of ${theme} looks fundamentally different in ${targetYear}, as market forces, regulation, and consumer behavior have converged to reshape the industry.`,
-        () => `${datelinePrefix}A wave of consolidation and innovation around ${theme} has redrawn the competitive landscape, producing winners and losers that few would have predicted.`
-      ],
-      Technology: [
-        () => `${datelinePrefix}The technology underpinning ${theme} has matured rapidly, moving from experimental deployments to infrastructure that now shapes daily life for hundreds of millions of people.`,
-        () => `${datelinePrefix}What was a research frontier around ${theme} just a few years ago is now a major industry, with capabilities that have outpaced even optimistic projections.`
-      ],
-      AI: [
-        () => `${datelinePrefix}AI capabilities around ${theme} have accelerated past what even the most bullish forecasts predicted, with new benchmarks being set quarterly.`,
-        () => `${datelinePrefix}In ${targetYear}, ${theme} has moved from demos and pilots to deployment at scale, fundamentally changing how organizations operate and compete.`
-      ],
-      Arts: [
-        () => `${datelinePrefix}The cultural landscape around ${theme} has evolved in unexpected ways, with new voices, platforms, and economic models reshaping how art is created and consumed.`,
-        () => `${datelinePrefix}By ${targetYear}, the forces set in motion around ${theme} have produced a creative scene that is more diverse, more global, and more commercially viable than critics predicted.`
-      ],
-      Lifestyle: [
-        () => `${datelinePrefix}The way people live with ${theme} has changed substantially, as new products, habits, and social norms have emerged to replace the uncertainty of just a few years ago.`,
-        () => `${datelinePrefix}In ${targetYear}, the daily reality of ${theme} looks nothing like the breathless predictions or doomsday warnings. It is more mundane, more integrated, and more consequential.`
-      ],
-      Opinion: [
-        () => `${datelinePrefix}The debate around ${theme} has matured from speculation to evidence, and the evidence tells a more complex story than either side anticipated.`
-      ]
-    };
-    const ledePool = ledeBySection[story.section] || ledeBySection['U.S.'];
-    const ledeTemplate = pickStable(ledePool, `${seed}|lede`) || ledePool[0];
-    lede = typeof ledeTemplate === 'function' ? ledeTemplate() : String(ledeTemplate || '');
+    fallbackLines.push(futureEventSeedRaw.endsWith('.') ? futureEventSeedRaw : `${futureEventSeedRaw}.`);
+    fallbackLines.push('');
   }
 
-  // ── Context paragraph: what's happening NOW in the target year ──
-  const contextBySection = {
-    'U.S.': () => `The shifts have been driven by a combination of legislative action, judicial decisions, and changing public expectations. Officials across both parties say the old approach was unsustainable, though they disagree sharply on what the new framework should prioritize. The result is a system that looks different from state to state, with federal guidelines setting a floor that local politics pushes higher or lower depending on the jurisdiction.`,
-    World: () => `Multiple factors have converged: economic pressure, technological change, and a series of diplomatic breakthroughs that seemed unlikely just a few years ago. Analysts say the current arrangement is more stable than what preceded it, but caution that the underlying tensions around ${theme} remain unresolved and could resurface under different conditions.`,
-    Business: () => `The market dynamics have shifted substantially. Companies that positioned early for the new reality around ${theme} have gained a durable advantage, while those that waited are now scrambling to catch up. Investment in the sector has grown at a compound rate that exceeds earlier projections by a wide margin.`,
-    Technology: () => `The pace of improvement has confounded skeptics. Performance benchmarks that seemed years away have been reached and surpassed. More importantly, the cost of deployment has dropped to a point where ${theme} is economically viable for mid-sized organizations, not just tech giants.`,
-    AI: () => `The pace of AI development around ${theme} has continued to accelerate. Models are more capable, cheaper to run, and more deeply integrated into critical systems than even the most optimistic projections anticipated. What was once a research curiosity has become infrastructure.`,
-    Arts: () => `The creative economy around ${theme} has been reshaped by new distribution channels, audience expectations, and business models. Traditional institutions have adapted, but the most dynamic growth has come from artists and organizations that embraced the new landscape early.`,
-    Lifestyle: () => `Consumer behavior has shifted in ways that are now self-reinforcing. New products and services built around ${theme} have moved from early adoption to mainstream usage, changing expectations and habits at a speed that has surprised even industry insiders.`,
-    Opinion: () => `The empirical record is now extensive enough to evaluate the early predictions. Some have proven remarkably prescient. Others look almost quaint in retrospect. What is clear is that ${theme} has evolved in ways that defy simple narratives of progress or decline.`
-  };
-  const contextPara = (contextBySection[story.section] || contextBySection['U.S.'])();
-
-  // ── Impact/consequences paragraph ──
-  const impactBySection = {
-    'U.S.': () => `The practical consequences are visible in budgets, hiring, and infrastructure projects across the country. Federal spending on programs related to ${theme} has grown significantly, and state-level experimentation has produced a patchwork of approaches that researchers are now studying for effectiveness.`,
-    World: () => `The consequences extend beyond diplomacy. Trade patterns, migration flows, and investment decisions have all been reshaped by the evolving dynamics around ${theme}. The countries that adapted fastest have gained economic advantages that may prove durable.`,
-    Business: () => `The financial impact has been substantial. Publicly traded companies with significant exposure to ${theme} have collectively added hundreds of billions in market capitalization. Private markets have been even more aggressive, with venture investment setting records in consecutive quarters.`,
-    Technology: () => `The downstream effects are pervasive. Industries from healthcare to logistics to education have been transformed by capabilities that did not exist at scale before. The question is no longer whether the technology works, but how to govern it, distribute its benefits, and manage its risks.`,
-    AI: () => `The downstream effects have been staggering. Entire workflows in healthcare, legal, finance, and engineering have been restructured around AI capabilities. Productivity metrics are up sharply in sectors that have adopted, while labor markets are adjusting through a combination of retraining, new roles, and displacement that policymakers are still learning to address.`,
-    Arts: () => `The impact on the industry has been both creative and financial. New forms of expression have emerged, audience engagement has deepened, and the economics of cultural production have shifted in ways that reward adaptability.`,
-    Lifestyle: () => `The effects are showing up in everyday metrics: how people spend their time, what they buy, how they communicate, and what they expect from the institutions around them. The change has been gradual but cumulative, and reversal now seems unlikely.`,
-    Opinion: () => `The effects are real and measurable, but their interpretation remains contested. Different stakeholders point to different data, and the debate over ${theme} has become a proxy for larger disagreements about priorities, fairness, and the pace of change.`
-  };
-  const impactPara = (impactBySection[story.section] || impactBySection['U.S.'])();
-
-  // ── Debate/tension paragraph ──
-  const debateBySection = {
-    'U.S.': () => `The debate is far from settled. Proponents of the current approach point to measurable improvements in outcomes and efficiency. Critics argue that the changes have created new inequities and that the benefits are unevenly distributed across income levels and geographies.`,
-    World: () => `Tensions remain. While the current framework has reduced some sources of friction, it has created new ones. Smaller nations argue that the rules were written by and for the largest players, while emerging powers push for revisions that reflect their growing influence.`,
-    Business: () => `Not everyone has benefited. Small and mid-sized firms have struggled to keep pace with the investment required. Labor advocates argue that the gains have been concentrated at the top, while workers face displacement, retraining demands, and a job market that rewards different skills than it did before.`,
-    Technology: () => `The governance challenges are substantial. Regulators in multiple jurisdictions are developing frameworks, but the technology is moving faster than the rules. Industry leaders argue for self-regulation; civil society groups say that approach has already failed.`,
-    AI: () => `The governance challenges are the most consequential they have ever been. Multiple jurisdictions have enacted or proposed AI regulation, but enforcement lags deployment. Safety researchers warn that the current pace leaves insufficient time for adequate testing, while industry leaders argue that slowing down would cede ground to less cautious competitors.`,
-    Arts: () => `The tensions are real. Questions about ownership, attribution, and fair compensation have intensified as new technologies reshape creative production. The legal and ethical frameworks are still catching up to the reality on the ground.`,
-    Lifestyle: () => `The change has been broadly positive for some demographics and disorienting for others. Generational divides are visible in adoption patterns, and the gap between early adopters and holdouts has created friction in workplaces, families, and public life.`,
-    Opinion: () => `The most productive debates have moved past ideology and into specifics: which policies work, for whom, at what cost, and with what trade-offs.`
-  };
-  const debatePara = (debateBySection[story.section] || debateBySection['U.S.'])();
-
-  // ── What's next paragraph ──
-  const nextBySection = {
-    'U.S.': () => `Looking ahead, the next phase will be shaped by upcoming elections, pending court cases, and budget negotiations that will determine whether the current trajectory accelerates or faces a correction. Analysts say the fundamentals favor continued change, but the pace and direction remain politically contested.`,
-    World: () => `The next chapter will be determined by whether the current cooperation holds under stress. Economic downturns, security crises, or leadership changes in key countries could shift dynamics quickly. For now, the momentum favors continued engagement, but the margins are thin.`,
-    Business: () => `Market watchers expect the next wave to be driven by consolidation, as larger players acquire capabilities and smaller ones either specialize or exit. The regulatory environment will be a key variable, with pending decisions in multiple jurisdictions likely to reshape competitive dynamics.`,
-    Technology: () => `The next frontier is integration: embedding these capabilities into existing systems at a scale that requires new approaches to security, reliability, and governance. The companies and institutions that solve those challenges will define the next phase.`,
-    AI: () => `The next 12-24 months are expected to bring capabilities that further blur the line between human and machine performance in key domains. The questions that will matter most are not technical but institutional: who governs these systems, who benefits, and who bears the cost when they fail.`,
-    Arts: () => `The direction is toward further democratization of creative tools, deeper audience engagement, and ongoing battles over intellectual property and compensation. The institutions that thrive will be those that embrace the new dynamics rather than resist them.`,
-    Lifestyle: () => `Trends point toward further integration into daily routines, with new products and services continuing to emerge. The challenge will be managing the transitions for those who have been left behind.`,
-    Opinion: () => `The path forward requires humility about what we know and rigor about what we measure. The stakes around ${theme} are too high for either complacency or panic.`
-  };
-  const nextPara = (nextBySection[story.section] || nextBySection['U.S.'])();
-
-  // ── Sources ──
-  const sourceLines = [];
-  const usedUrls = new Set();
-  const addSource = (title, url) => {
-    const cleanUrl = String(url || '').trim();
-    if (!cleanUrl) return;
-    if (usedUrls.has(cleanUrl)) return;
-    usedUrls.add(cleanUrl);
-    const cleanTitle = stripAuthorSuffix(String(title || '')).replace(/\s+/g, ' ').trim();
-    sourceLines.push(`- ${cleanTitle || cleanUrl} — ${cleanUrl}`.trim());
-  };
-
+  // Add source links as clickable references
+  const fallbackSourceLines = [];
+  const usedFallbackUrls = new Set();
   for (const c of citations.slice(0, 6)) {
-    addSource(c.title, c.url);
+    const cleanUrl = String(c.url || '').trim();
+    if (!cleanUrl || usedFallbackUrls.has(cleanUrl)) continue;
+    usedFallbackUrls.add(cleanUrl);
+    const cleanTitle = stripAuthorSuffix(String(c.title || '')).replace(/\s+/g, ' ').trim();
+    fallbackSourceLines.push(`- ${cleanTitle || cleanUrl} — ${cleanUrl}`.trim());
   }
   for (const m of markets.slice(0, 2)) {
     const label = String(m.label || '').replace(/\?+$/g, '').trim();
-    addSource(label ? `Polymarket market: ${label}` : 'Polymarket market', m.url);
-  }
-  for (const key of Object.keys(econ || {}).slice(0, 2)) {
-    const row = econ[key] || {};
-    addSource(key, row.url);
-  }
-
-  const lines = [];
-  lines.push(lede);
-  lines.push('');
-  lines.push(contextPara);
-  lines.push('');
-  lines.push(impactPara);
-  lines.push('');
-  lines.push(debatePara);
-  lines.push('');
-  lines.push(nextPara);
-  lines.push('');
-  if (sourceLines.length) {
-    lines.push('Sources');
-    lines.push('');
-    lines.push(sourceLines.join('\n'));
+    const mUrl = String(m.url || '').trim();
+    if (mUrl && !usedFallbackUrls.has(mUrl)) {
+      usedFallbackUrls.add(mUrl);
+      fallbackSourceLines.push(`- ${label ? `Polymarket: ${label}` : 'Polymarket market'} — ${mUrl}`.trim());
+    }
   }
 
-  return lines.join('\n');
+  if (fallbackSourceLines.length) {
+    fallbackLines.push('Sources');
+    fallbackLines.push('');
+    fallbackLines.push(fallbackSourceLines.join('\n'));
+  }
+
+  return fallbackLines.join('\n') || `Report from ${editionDate}.`;
 }
 
 function buildSeedArticleFromStory(story) {
@@ -535,7 +448,7 @@ function buildSeedArticleFromStory(story) {
     title,
     dek,
     meta,
-    image: 'assets/img/humanoids-labor-market.svg',
+    image: story.image || 'assets/img/humanoids-labor-market.svg',
     body,
     signals,
     markets,
@@ -2068,6 +1981,28 @@ async function requestHandler(req, res) {
     }
 
     const { url, pathname, years, day } = parseRequest(req.url);
+
+    // ── Admin auth gate ──
+    const isProtectedRoute = pathname.startsWith('/api/admin') || pathname === '/api/day-signal';
+    if (isProtectedRoute && ADMIN_SECRET) {
+      const authResult = checkAdminAuth(req, url);
+      if (authResult === false) {
+        // No valid auth — show login page
+        sendAdminLogin(res);
+        return;
+      }
+      if (authResult === 'set-cookie') {
+        // Valid secret in query param — set cookie and redirect to clean URL
+        const cleanUrl = new URL(url.href);
+        cleanUrl.searchParams.delete('secret');
+        res.writeHead(302, {
+          'Location': cleanUrl.pathname + cleanUrl.search,
+          'Set-Cookie': `${ADMIN_COOKIE_NAME}=${ADMIN_SECRET}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${ADMIN_COOKIE_MAX_AGE}`
+        });
+        res.end();
+        return;
+      }
+    }
 
     if (pathname === '/api/ping') {
       sendJson(res, { ok: true });

@@ -1,7 +1,59 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { openDatabase, migrate } from './db.js';
+
+// ── Image generation for key stories ──
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const IMG_DIR = path.resolve(__dirname, '..', '..', 'assets', 'img', 'generated');
+
+async function generateStoryImage(prompt, storyId) {
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!apiKey) return null;
+  try {
+    if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
+    const safeId = String(storyId || 'story').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
+    const filename = `${safeId}.png`;
+    const filepath = path.join(IMG_DIR, filename);
+
+    // Skip if already generated
+    if (fs.existsSync(filepath)) return `assets/img/generated/${filename}`;
+
+    const resp = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'dall-e-3',
+        prompt: `Newspaper editorial photograph style, photojournalistic. ${prompt}. No text overlays. Modern, high quality.`,
+        n: 1,
+        size: '1792x1024',
+        quality: 'standard'
+      }),
+      signal: AbortSignal.timeout(60000)
+    });
+
+    if (!resp.ok) {
+      console.error(`Image gen failed (${resp.status}): ${await resp.text().catch(() => '')}`);
+      return null;
+    }
+
+    const data = await resp.json();
+    const imageUrl = data?.data?.[0]?.url;
+    if (!imageUrl) return null;
+
+    // Download the image
+    const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(30000) });
+    if (!imgResp.ok) return null;
+    const buffer = Buffer.from(await imgResp.arrayBuffer());
+    fs.writeFileSync(filepath, buffer);
+
+    return `assets/img/generated/${filename}`;
+  } catch (err) {
+    console.error(`Image gen error for ${storyId}: ${err.message}`);
+    return null;
+  }
+}
 import { parseFeed } from './rss.js';
 import { fetchPolymarketRawItems } from './polymarket.js';
 import { fetchFredSeriesRawItem } from './fred.js';
@@ -355,16 +407,8 @@ function buildHeadlineSeed(topicLabel, topicBrief, yearsForward, seed) {
   }
   if (subject.length < 4) subject = 'Signal shift';
 
-  // Future-forward templates — these should NOT be anniversary framings
-  const templates = [
-    `${targetYear}: A New Chapter for ${subject}`,
-    `${subject} Enters Uncharted Territory in ${targetYear}`,
-    `The ${targetYear} Outlook for ${subject}`,
-    `${targetYear}: What Comes Next for ${subject}`,
-    `${subject} Faces Critical Moment in ${targetYear}`,
-    `The Future of ${subject} Takes Shape in ${targetYear}`
-  ];
-  return templates[stableHash(seed) % templates.length];
+  // Minimal fallback headline — Opus should override this with a real extrapolation
+  return `${subject} in ${targetYear}`;
 }
 
 function buildDekSeed(topicLabel, topicBrief, yearsForward, editionDate, baselineDay) {
@@ -387,16 +431,9 @@ function buildDekSeed(topicLabel, topicBrief, yearsForward, editionDate, baselin
   const targetYear = Number(baselineYear) + (Number(yearsForward) || 0);
   const dateLabel = String(editionDate || '').trim() || String(targetYear);
 
-  // Build a dek as a plausible future sub-headline — NOT an anniversary or backward-looking recap
+  // Minimal fallback dek — Opus should override this with a real extrapolation
   const shortLabel = label.length > 80 ? label.slice(0, 80).replace(/\s+\S*$/, '').trim() : label;
-  const options = [
-    `By ${targetYear}, the landscape around ${shortLabel} has transformed in ways that affect millions of people daily.`,
-    `New policies, technologies, and market forces have reshaped ${shortLabel} as of ${dateLabel}.`,
-    `A detailed look at where ${shortLabel} stands in ${targetYear} — and what it means for the decade ahead.`,
-    `The forces driving ${shortLabel} have accelerated, producing outcomes that were speculative just years ago.`
-  ];
-  const seed = `${baselineDay}|${editionDate}|${yearsForward}|${label}`;
-  return options[stableHash(seed) % options.length];
+  return `A ${targetYear} report on ${shortLabel.toLowerCase()}.`;
 }
 
 function buildEvidencePack({ topic, evidenceSignals, econSignals, marketSignals, editionDate, yearsForward }) {
@@ -2116,6 +2153,15 @@ export class FutureTimesPipeline {
               curationGeneratedAt: generatedAt,
               yearsForward
             };
+
+            // Generate an image for hero/key stories if OpenAI key is available
+            if (hero || key) {
+              const imgPrompt = String(draft.title || curatedTitle || '').trim();
+              const imgPath = await generateStoryImage(imgPrompt, storyId);
+              if (imgPath) {
+                articleJson.image = imgPath;
+              }
+            }
 
             // Make the key story instant-load by populating the normal render cache.
             this.storeRendered(storyId, articleJson, { curationGeneratedAt: generatedAt });
