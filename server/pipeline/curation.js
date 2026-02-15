@@ -24,12 +24,14 @@ export function getOpusCurationConfigFromEnv() {
   const hasKey = Boolean(apiKeyEnv || apiKeyStored);
   const mode = normalizeMode(modeRaw || (hasKey ? 'anthropic' : 'mock'));
 
-  const modelDefault = mode === 'anthropic' ? 'claude-opus-4-6' : 'opus-4.6';
+  // Default to Sonnet for curation (faster, fits within Vercel timeout with full article generation)
+  const modelDefault = mode === 'anthropic' ? 'claude-sonnet-4-5-20250929' : 'claude-sonnet-4-5-20250929';
   const model = String(process.env.OPUS_MODEL || stored.model || modelDefault).trim() || modelDefault;
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 1, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 32000, 4000, 64000);
-  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 900000, 10000, 1200000);
+  // Timeout must fit within Vercel's 300s function limit
+  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 250000, 10000, 280000);
   const apiKey = apiKeyEnv || apiKeyStored;
   const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
   const systemPrompt =
@@ -90,8 +92,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       .map((s) => `- ${String(s.title || '').slice(0, 160)} (${String(s.source || '').slice(0, 40)})`)
       .join('\n');
 
-  // Cap candidates to top 20 to keep prompt and output manageable
-  const cappedCandidates = (candidates || []).slice(0, 20);
+  // Cap candidates to top 12 — each gets a full article from the LLM
+  const cappedCandidates = (candidates || []).slice(0, 12);
   const candidateLines = cappedCandidates
     .map((c) => {
       const topic = c.topic || {};
@@ -270,31 +272,25 @@ async function callAnthropicJson(prompt, config) {
 
   const requested = String(config.model || '').trim();
   const resolved = resolveAnthropicModelAlias(requested);
+  // Use Sonnet first for speed (full article generation for all stories needs fast model)
+  // Then fall back to Opus, then Haiku
   const modelsToTry = uniqueStrings([
     resolved,
     requested,
-    'claude-opus-4-6',
     'claude-sonnet-4-5-20250929',
+    'claude-opus-4-6',
     'claude-haiku-4-5-20251001'
   ]);
 
   let lastErr = null;
   for (const model of modelsToTry) {
-    // Use extended thinking for capable models to get better curation
-    const supportsThinking = model.includes('sonnet') || model.includes('opus');
     const body = {
       model,
       max_tokens: config.maxTokens,
+      temperature: 0.4,
       system: String(config.systemPrompt || DEFAULT_OPUS_SYSTEM_PROMPT),
       messages: [{ role: 'user', content: prompt }]
     };
-    if (supportsThinking) {
-      // Extended thinking: budget up to 10k tokens for reasoning
-      body.thinking = { type: 'enabled', budget_tokens: 10000 };
-      // temperature must not be set when thinking is enabled
-    } else {
-      body.temperature = 0.4;
-    }
 
     try {
       const resp = await fetchJsonWithTimeout(
@@ -311,25 +307,16 @@ async function callAnthropicJson(prompt, config) {
         config.timeoutMs
       );
 
-      // Anthropic returns { content: [{type:'thinking', thinking:'...'}, {type:'text', text:'...'}], ... }.
-      // Extract text blocks (skip thinking blocks which are reasoning traces).
+      // Anthropic returns { content: [{type:'text', text:'...'}], ... }.
       let text = '';
-      let thinkingTrace = '';
       if (Array.isArray(resp?.content)) {
         for (const block of resp.content) {
-          if (block && block.type === 'thinking' && block.thinking) {
-            thinkingTrace += String(block.thinking);
-          }
           if (block && block.type === 'text' && block.text) {
             text += String(block.text);
           }
         }
       }
       if (!text) text = '';
-      // Log thinking trace for debugging (stored separately)
-      if (thinkingTrace) {
-        console.log(`[curation] Thinking trace (${thinkingTrace.length} chars) for model=${model}`);
-      }
 
       // Strip markdown code fences if present
       const stripped = text
