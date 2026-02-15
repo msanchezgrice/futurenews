@@ -9,11 +9,12 @@ export function openDatabase(dbFilePath) {
   if (process.env.VERCEL && dbFilePath && !dbFilePath.startsWith('/tmp')) {
     const tmpPath = path.join('/tmp', path.basename(dbFilePath));
     try {
-      // Copy only if not already there (cold start) or source is newer
-      const srcStat = fs.existsSync(dbFilePath) ? fs.statSync(dbFilePath) : null;
-      const tmpStat = fs.existsSync(tmpPath) ? fs.statSync(tmpPath) : null;
-      if (srcStat && (!tmpStat || srcStat.mtimeMs > tmpStat.mtimeMs)) {
-        fs.copyFileSync(dbFilePath, tmpPath);
+      // Only seed /tmp on true cold start (no file yet). Never overwrite —
+      // the /tmp copy is the live DB with curations from previous invocations.
+      if (!fs.existsSync(tmpPath)) {
+        if (fs.existsSync(dbFilePath)) {
+          fs.copyFileSync(dbFilePath, tmpPath);
+        }
       }
       effectivePath = tmpPath;
     } catch (err) {
