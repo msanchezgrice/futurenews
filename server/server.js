@@ -34,7 +34,7 @@ const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
-const MIN_PUBLISHED_BODY_CHARS = Math.max(220, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 420));
+const MIN_PUBLISHED_BODY_CHARS = Math.max(140, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 220));
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -201,9 +201,7 @@ function hasPublishableHeadlineAndDek(article) {
   const lowTitle = title.toLowerCase();
   const lowDek = dek.toLowerCase();
   if (lowTitle.startsWith('future illustration')) return false;
-  if (lowDek.startsWith('a 2031 report on')) return false;
-  if (lowDek.startsWith('a 2030 report on')) return false;
-  if (lowDek.startsWith('a 2029 report on')) return false;
+  if (/^a \d{4} report on\b/i.test(lowDek)) return false;
   return true;
 }
 
@@ -219,6 +217,15 @@ function getPreRenderedArticle(storyId, story = null) {
   if (dbCached && isPublishReadyArticle(dbCached)) {
     cacheByKey.set(key, dbCached);
     return dbCached;
+  }
+  const resolvedStory = story || pipeline.getStory(storyId);
+  if (resolvedStory) {
+    const seedArticle = buildSeedArticleFromStory(resolvedStory);
+    if (isPublishReadyArticle(seedArticle)) {
+      pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: resolvedStory?.curation?.generatedAt || null });
+      cacheByKey.set(key, seedArticle);
+      return seedArticle;
+    }
   }
   return null;
 }
