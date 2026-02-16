@@ -35,6 +35,7 @@ const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
 const MIN_PUBLISHED_BODY_CHARS = Math.max(140, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 220));
+const MIN_PUBLISHED_CONFIDENCE = Math.max(1, Math.min(100, Number(process.env.FT_MIN_PUBLISHED_CONFIDENCE || 60)));
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -195,13 +196,9 @@ function hasRenderableBody(article, minChars = 140) {
 
 function hasPublishableHeadlineAndDek(article) {
   const title = String(article?.title || '').trim();
-  const dek = String(article?.dek || '').trim();
   if (!title || title.length < 8) return false;
-  if (!dek || dek.length < 16) return false;
-  const lowTitle = title.toLowerCase();
-  const lowDek = dek.toLowerCase();
-  if (lowTitle.startsWith('future illustration')) return false;
-  if (/^a \d{4} report on\b/i.test(lowDek)) return false;
+  const confidence = Number(article?.confidence ?? article?.curation?.confidence ?? 0);
+  if (Number.isFinite(confidence) && confidence > 0 && confidence < MIN_PUBLISHED_CONFIDENCE) return false;
   return true;
 }
 
