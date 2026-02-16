@@ -10,8 +10,8 @@
   },
   "crons": [
     { "path": "/api/cron/pipeline", "schedule": "5 12 * * *" },
-    { "path": "/api/cron/images/refresh", "schedule": "25 12 * * *" },
-    { "path": "/api/cron/images/worker", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/images/worker", "schedule": "30 12 * * *" },
+    { "path": "/api/cron/images/worker", "schedule": "50 12 * * *" }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/handler.mjs" }

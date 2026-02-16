@@ -68,6 +68,7 @@ function checkAdminAuth(req, url) {
 //   Authorization: Bearer <CRON_SECRET>
 // When unset, cron routes are open (local dev).
 const CRON_SECRET = String(process.env.CRON_SECRET || '').trim();
+const CRON_START_DAY = normalizeDay(process.env.CRON_START_DAY || '');
 
 function checkCronAuth(req, url) {
   if (!CRON_SECRET && !ADMIN_SECRET) return true;
@@ -79,6 +80,16 @@ function checkCronAuth(req, url) {
   const qs = String(url.searchParams.get('cronSecret') || '').trim();
   if (qs && CRON_SECRET && qs === CRON_SECRET) return true;
   return false;
+}
+
+function shouldRunCronForDay(dayValue) {
+  const targetDay = normalizeDay(dayValue) || formatDay();
+  if (!CRON_START_DAY) return { run: true, day: targetDay };
+  return {
+    run: targetDay >= CRON_START_DAY,
+    day: targetDay,
+    startDay: CRON_START_DAY
+  };
 }
 
 function sendAdminLogin(res) {
@@ -653,6 +664,22 @@ function getArticleStatus(storyId, story = null) {
     cacheByKey.set(key, dbCached);
     return { status: 'ready', article: dbCached };
   }
+  // On Vercel cold start, render_cache is empty. Check if the story already
+  // has a body from the baked edition payload or curation draftArticle.
+  if (story) {
+    const editionBody = String(story.body || '').trim();
+    const curationBody = String(story.curation?.draftArticle?.body || '').trim();
+    const bestBody = (editionBody.length > 100 ? editionBody : '') || (curationBody.length > 100 ? curationBody : '');
+    if (bestBody) {
+      const seedArticle = buildSeedArticleFromStory(story);
+      if (!seedArticle.body || seedArticle.body.trim().length < 100) {
+        seedArticle.body = bestBody;
+      }
+      cacheByKey.set(key, seedArticle);
+      pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: story?.curation?.generatedAt || null });
+      return { status: 'ready', article: seedArticle };
+    }
+  }
   const job = getActiveJob(key);
   if (job) {
     return { status: job.status === 'complete' ? 'ready' : 'streaming', article: job.result, startedAt: job.startedAt };
@@ -668,6 +695,21 @@ function startRenderJob(storyId, story = null) {
   if (cached) {
     cacheByKey.set(key, cached);
     return { status: 'cached', key, article: cached, job: null };
+  }
+  // Fall back to edition body / curation draftArticle (Vercel cold start)
+  if (resolvedStory) {
+    const editionBody = String(resolvedStory.body || '').trim();
+    const curationBody = String(resolvedStory.curation?.draftArticle?.body || '').trim();
+    const bestBody = (editionBody.length > 100 ? editionBody : '') || (curationBody.length > 100 ? curationBody : '');
+    if (bestBody) {
+      const seedArticle = buildSeedArticleFromStory(resolvedStory);
+      if (!seedArticle.body || seedArticle.body.trim().length < 100) {
+        seedArticle.body = bestBody;
+      }
+      cacheByKey.set(key, seedArticle);
+      pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: resolvedStory?.curation?.generatedAt || null });
+      return { status: 'cached', key, article: seedArticle, job: null };
+    }
   }
 
   const existing = getActiveJob(key);
@@ -1858,16 +1900,38 @@ async function requestHandler(req, res) {
 	    if (pathname === '/api/cron/pipeline') {
 	      if (req.method !== 'GET') return send405(res, 'GET');
 	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const gate = shouldRunCronForDay(requestedDay);
+	      if (!gate.run) {
+	        sendJson(res, { ok: true, skipped: true, reason: 'cron_not_started', day: gate.day, startDay: gate.startDay });
+	        return;
+	      }
 	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
 	      await pipeline.refresh({ day: builtDay, force: false });
 	      const curated = await pipeline.curateDay(builtDay, { force: false });
-	      sendJson(res, { ok: true, day: builtDay, curated });
+	      const flags = getFutureImagesFlags();
+	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+	      const heroes = flags.imagesEnabled && flags.storyHeroEnabled
+	        ? await enqueueSectionHeroJobs({ day: builtDay, pipeline, yearsForward, force: false, includeGlobalHero: true })
+	        : { ok: true, skipped: true, reason: 'story_heroes_disabled' };
+	      const heroWorker = flags.imagesEnabled && flags.storyHeroEnabled
+	        ? await runImageWorker({
+	            day: builtDay,
+	            limit: Number(url.searchParams.get('heroWorkerLimit') || 3),
+	            maxMs: Number(url.searchParams.get('heroWorkerMaxMs') || 220000)
+	          })
+	        : { ok: true, skipped: true, reason: 'story_heroes_disabled' };
+	      sendJson(res, { ok: true, day: builtDay, curated, heroes, heroWorker });
 	      return;
 	    }
 
 	    if (pathname === '/api/cron/images/refresh') {
 	      if (req.method !== 'GET') return send405(res, 'GET');
 	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const gate = shouldRunCronForDay(requestedDay);
+	      if (!gate.run) {
+	        sendJson(res, { ok: true, skipped: true, reason: 'cron_not_started', day: gate.day, startDay: gate.startDay });
+	        return;
+	      }
 	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
 	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
 	      const count = Number(url.searchParams.get('count') || 30);
@@ -1883,6 +1947,11 @@ async function requestHandler(req, res) {
 	    if (pathname === '/api/cron/images/worker') {
 	      if (req.method !== 'GET') return send405(res, 'GET');
 	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const gate = shouldRunCronForDay(requestedDay);
+	      if (!gate.run) {
+	        sendJson(res, { ok: true, skipped: true, reason: 'cron_not_started', day: gate.day, startDay: gate.startDay });
+	        return;
+	      }
 	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
 	      const limit = Number(url.searchParams.get('limit') || 3);
 	      const maxMs = Number(url.searchParams.get('maxMs') || 220000);
