@@ -50,7 +50,7 @@ function checkAdminAuth(req, url) {
   if (!ADMIN_SECRET) return true; // no secret configured = open access (local dev)
   // Cron-friendly auth: Authorization: Bearer <secret>
   const auth = String(req.headers.authorization || '').trim();
-  const matchAuth = auth.match(/^Bearer\\s+(.+)$/i);
+  const matchAuth = auth.match(/^Bearer\s+(.+)$/i);
   if (matchAuth && String(matchAuth[1] || '').trim() === ADMIN_SECRET) return true;
   // Check query param
   const qsSecret = url.searchParams.get('secret') || '';
@@ -71,7 +71,7 @@ const CRON_SECRET = String(process.env.CRON_SECRET || '').trim();
 function checkCronAuth(req, url) {
   if (!CRON_SECRET && !ADMIN_SECRET) return true;
   const auth = String(req.headers.authorization || '').trim();
-  const matchAuth = auth.match(/^Bearer\\s+(.+)$/i);
+  const matchAuth = auth.match(/^Bearer\s+(.+)$/i);
   const token = matchAuth ? String(matchAuth[1] || '').trim() : '';
   if (token && ADMIN_SECRET && token === ADMIN_SECRET) return true;
   if (token && CRON_SECRET && token === CRON_SECRET) return true;
