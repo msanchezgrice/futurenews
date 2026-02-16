@@ -100,14 +100,22 @@ export async function callAnthropicJson({
       if (parsedResp && Array.isArray(parsedResp.content)) {
         for (const block of parsedResp.content) {
           if (block && block.type === 'text' && block.text) text += String(block.text);
-          if (toolName && block && block.type === 'tool_use' && block.name === toolName && block.input) {
+          // If we forced a tool choice, accept the first tool_use block we see.
+          if (toolName && !toolInput && block && block.type === 'tool_use' && block.input != null) {
             toolInput = block.input;
           }
         }
       }
-      if (!text) text = bodyText || '';
+      // Only fall back to parsing the raw API response when we are not expecting a tool call.
+      // When a tool is requested, the API response is valid JSON but it is *not* the model's JSON payload.
+      if (!text && !toolName) text = bodyText || '';
 
-      const parsed = toolInput || safeParseJson(text, null);
+      let parsed = toolInput;
+      if (toolName && typeof parsed === 'string') {
+        // Some clients may return tool input as a JSON string.
+        parsed = safeParseJson(parsed, parsed);
+      }
+      if (!parsed) parsed = safeParseJson(text, null);
       if (!parsed) {
         const err = new Error(`Anthropic JSON parse failed. Preview: ${(text || '').slice(0, 300)}`);
         err.code = 'anthropic_parse_failed';

@@ -232,6 +232,7 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
   const attempts = buildAttemptCounts(count);
   let parsed = null;
   let model = '';
+  let toolUsed = false;
   let usedCount = attempts[0] || Math.max(1, Math.min(200, Math.round(Number(count) || 50)));
   let lastErr = null;
   const startedAt = Date.now();
@@ -290,6 +291,7 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
       }
       parsed = resp.parsed;
       model = resp.model;
+      toolUsed = Boolean(resp.toolUsed);
       usedCount = attemptCount;
       console.log('[future_images] refreshIdeas ok', { attemptCount, model });
       break;
@@ -313,8 +315,19 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
     };
   }
 
-  const ideasRaw = Array.isArray(parsed?.ideas) ? parsed.ideas : [];
+  const ideasRaw = Array.isArray(parsed?.ideas)
+    ? parsed.ideas
+    : Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed?.items)
+        ? parsed.items
+        : [];
   const ideas = ideasRaw.slice(0, Math.max(1, Math.min(200, usedCount))).map(normalizeIdea);
+  if (!ideas.length) {
+    const parsedType = Array.isArray(parsed) ? 'array' : typeof parsed;
+    const keys = parsed && typeof parsed === 'object' ? Object.keys(parsed).slice(0, 24) : [];
+    return { ok: false, error: 'no_ideas_returned', day: builtDay, yearsForward, toolUsed, parsedType, keys };
+  }
 
   // Persist ideas (stable IDs per day+rank so on-demand images stay attached across refreshes).
   const generatedAt = String(parsed?.generatedAt || '').trim() || new Date().toISOString();
