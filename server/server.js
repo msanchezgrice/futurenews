@@ -11,6 +11,11 @@ import { FutureTimesPipeline } from './pipeline/pipeline.js';
 import { clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
 import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
+import { decorateArticlePayload, decorateEditionPayload } from './future_images/decorators.js';
+import { refreshIdeas } from './future_images/ideas.js';
+import { enqueueSectionHeroJobs, enqueueSingleIdeaJob, enqueueSingleStoryHeroJob, runImageWorker } from './future_images/jobs.js';
+import { getImagesAdminState } from './future_images/state.js';
+import { renderImagesAdminHtml } from './future_images/ui.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,6 +48,10 @@ const ADMIN_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 function checkAdminAuth(req, url) {
   if (!ADMIN_SECRET) return true; // no secret configured = open access (local dev)
+  // Cron-friendly auth: Authorization: Bearer <secret>
+  const auth = String(req.headers.authorization || '').trim();
+  const matchAuth = auth.match(/^Bearer\\s+(.+)$/i);
+  if (matchAuth && String(matchAuth[1] || '').trim() === ADMIN_SECRET) return true;
   // Check query param
   const qsSecret = url.searchParams.get('secret') || '';
   if (qsSecret === ADMIN_SECRET) return 'set-cookie'; // valid, set cookie
@@ -1886,6 +1895,80 @@ async function requestHandler(req, res) {
       return;
     }
 
+    // ── Future Images (admin-only) ──
+    if (pathname === '/api/admin/images') {
+      if (req.method !== 'GET') return send405(res, 'GET');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+      sendHtml(res, renderImagesAdminHtml({ day: builtDay, yearsForward }));
+      return;
+    }
+
+    if (pathname === '/api/admin/images/state') {
+      if (req.method !== 'GET') return send405(res, 'GET');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+      const state = await getImagesAdminState({ day: requestedDay, pipeline, yearsForward });
+      sendJson(res, state);
+      return;
+    }
+
+    if (pathname === '/api/admin/images/ideas/refresh') {
+      if (req.method !== 'POST') return send405(res, 'POST');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+      const force = String(url.searchParams.get('force') || '').toLowerCase() === 'true';
+      const count = Number(url.searchParams.get('count') || 50);
+      const result = await refreshIdeas({ day: requestedDay, pipeline, yearsForward, count, force });
+      sendJson(res, result, result && result.ok ? 200 : 400);
+      return;
+    }
+
+    if (pathname === '/api/admin/images/newspaper/refresh') {
+      if (req.method !== 'POST') return send405(res, 'POST');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+      const force = String(url.searchParams.get('force') || '').toLowerCase() === 'true';
+      const result = await enqueueSectionHeroJobs({ day: requestedDay, pipeline, yearsForward, force, includeGlobalHero: true });
+      sendJson(res, result, result && result.ok ? 200 : 400);
+      return;
+    }
+
+    if (pathname === '/api/admin/images/jobs/run') {
+      if (req.method !== 'POST') return send405(res, 'POST');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const limit = Number(url.searchParams.get('limit') || 3);
+      const maxMs = Number(url.searchParams.get('maxMs') || 220000);
+      const result = await runImageWorker({ day: requestedDay, limit, maxMs });
+      sendJson(res, result, result && result.ok ? 200 : 400);
+      return;
+    }
+
+    if (pathname === '/api/admin/images/jobs/enqueue') {
+      if (req.method !== 'POST') return send405(res, 'POST');
+      const body = await readJsonBody(req);
+      const kind = String(body?.kind || '').trim();
+      const yearsForward = clampYears(body?.yearsForward ?? body?.years ?? url.searchParams.get('years') ?? String(EDITION_YEARS));
+      const requestedDay = normalizeDay(body?.day) || day || pipeline.getLatestDay() || formatDay();
+      const force = Boolean(body?.force);
+      if (kind === 'story_section_hero') {
+        const storyId = String(body?.storyId || '').trim();
+        const section = String(body?.section || '').trim();
+        const result = await enqueueSingleStoryHeroJob({ day: requestedDay, pipeline, storyId, section, yearsForward, force });
+        sendJson(res, result, result && result.ok ? 200 : 400);
+        return;
+      }
+      if (kind === 'idea_image') {
+        const ideaId = String(body?.ideaId || '').trim();
+        const result = await enqueueSingleIdeaJob({ ideaId, force });
+        sendJson(res, result, result && result.ok ? 200 : 400);
+        return;
+      }
+      sendJson(res, { ok: false, error: 'unknown_kind', kind }, 400);
+      return;
+    }
+
     if (pathname === '/api/admin/prerender') {
       if (req.method !== 'POST') return send405(res, 'POST');
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
@@ -2211,6 +2294,7 @@ async function requestHandler(req, res) {
   <div class="row">
     <a href="${escapeHtml(frontHref)}" target="_blank" rel="noopener">Front page</a>
     <a href="${escapeHtml(curationHtmlUrl)}" target="_blank" rel="noopener">Extrapolations (HTML)</a>
+    <a href="/api/admin/images?day=${escapeHtml(encodeURIComponent(builtDay))}&years=${escapeHtml(encodeURIComponent(String(yearsForward)))}" target="_blank" rel="noopener">Images</a>
     <a href="${escapeHtml(traceHtmlUrl)}" target="_blank" rel="noopener">Event trace (HTML)</a>
     <a href="${escapeHtml(curationUrl)}" target="_blank" rel="noopener">Curation (JSON)</a>
     <a href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener">Prompt preview JSON (+${escapeHtml(String(yearsForward))}y)</a>
@@ -2549,7 +2633,154 @@ async function requestHandler(req, res) {
         sendJson(res, { error: 'edition_not_found', day: builtDay, years }, 404);
         return;
       }
-      sendJson(res, payload);
+      let decorated = payload;
+      try {
+        decorated = await decorateEditionPayload(payload, { day: builtDay, yearsForward: years });
+      } catch {
+        // best-effort: never break newspaper
+      }
+      sendJson(res, decorated);
+      return;
+    }
+
+    // ── Expand short article body to full-length via Sonnet (real-time SSE) ──
+    if (pathname.match(/^\/api\/article\/.+\/expand$/)) {
+      if (req.method !== 'POST') { send405(res, 'POST'); return; }
+      const storyId = pathname.replace('/api/article/', '').replace('/expand', '');
+      if (!storyId) { sendNotFound(res); return; }
+
+      let story = pipeline.getStory(storyId);
+      if (!story) {
+        const match = String(storyId).match(/^ft-(\d{4}-\d{2}-\d{2})-y(\d+)/);
+        if (match) { await pipeline.ensureDayBuilt(match[1]); story = pipeline.getStory(storyId); }
+      }
+      if (!story) { sendJson(res, { error: 'not_found' }, 404); return; }
+
+      const existing = getArticleStatus(storyId, story);
+      const currentBody = existing?.article?.body || '';
+
+      const curation = story?.curation || {};
+      const editionDate = story?.evidencePack?.editionDate || '';
+      const baselineDay = normalizeDay(story.day) || formatDay();
+      const baselineYear = baselineDay.slice(0, 4) || '2026';
+      const targetYear = Number(baselineYear) + (Number.isFinite(Number(story.yearsForward)) ? Number(story.yearsForward) : 0);
+      const title = curation?.curatedTitle || curation?.draftArticle?.title || story.title || '';
+      const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dek || '';
+      const directions = curation?.sparkDirections || '';
+      const eventSeed = curation?.futureEventSeed || '';
+
+      const expandPrompt = [
+        `You are writing a full-length article for The Future Times, published on ${editionDate || targetYear}.`,
+        `Write it as a REAL news report from ${targetYear}. You are a journalist in ${targetYear} reporting on events happening NOW.`,
+        ``,
+        `CRITICAL RULES:`,
+        `- Write about what is HAPPENING in ${targetYear}, not about what happened in ${baselineYear}.`,
+        `- Do NOT frame as "anniversary" or "looking back" pieces.`,
+        `- Do NOT reference or link to original news stories from ${baselineYear}.`,
+        `- Write PREDICTIONS and PLAUSIBLE OUTCOMES: policies, technologies, markets, specific numbers.`,
+        `- Do not describe the article as a projection, simulation, or prompt output.`,
+        ``,
+        `You have a SHORT DRAFT of this article. EXPAND it into a full 5-7 paragraph article.`,
+        `Keep the same facts, tone, and angle but add depth: more context, quotes from plausible sources, specific data, implications.`,
+        `Output narrative paragraphs only (NYT-style prose, no markdown headers, no bullet lists, no Sources section).`,
+        ``,
+        directions ? `Curator directions: ${directions}` : '',
+        eventSeed ? `Future event seed: ${eventSeed}` : '',
+        ``,
+        `Headline: ${title}`,
+        dek ? `Dek: ${dek}` : '',
+        ``,
+        `SHORT DRAFT TO EXPAND:`,
+        currentBody,
+        ``,
+        `Write the full expanded article body now.`
+      ].filter(Boolean).join('\n');
+
+      const opusCfg = readOpusRuntimeConfig() || {};
+      const apiKey = process.env.ANTHROPIC_API_KEY || opusCfg.apiKey || '';
+      if (!apiKey) { sendJson(res, { error: 'no_api_key' }, 500); return; }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120000);
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01'
+          },
+          body: JSON.stringify({
+            model: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929',
+            max_tokens: 4096,
+            temperature: 0.6,
+            stream: true,
+            messages: [{ role: 'user', content: expandPrompt }]
+          }),
+          signal: controller.signal
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          res.write(`data: ${JSON.stringify({ type: 'error', error: `API ${resp.status}: ${errText.slice(0, 200)}` })}\n\n`);
+          res.end();
+          clearTimeout(timeout);
+          return;
+        }
+
+        let fullBody = '';
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let sseBuffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuffer += decoder.decode(value, { stream: true });
+
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const d = line.slice(6).trim();
+            if (d === '[DONE]') continue;
+            try {
+              const evt = JSON.parse(d);
+              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+                const text = evt.delta.text || '';
+                fullBody += text;
+                res.write(`data: ${JSON.stringify({ type: 'chunk', delta: text })}\n\n`);
+              }
+            } catch { /* skip */ }
+          }
+        }
+
+        clearTimeout(timeout);
+
+        if (fullBody.trim().length > 200) {
+          const expandedArticle = {
+            ...(existing?.article || {}),
+            body: fullBody.trim(),
+            expandedAt: new Date().toISOString()
+          };
+          pipeline.storeRendered(storyId, expandedArticle, { curationGeneratedAt: curation?.generatedAt || null });
+          cacheByKey.set(keyFor(storyId, story), expandedArticle);
+        }
+
+        res.write(`data: ${JSON.stringify({ type: 'complete', body: fullBody.trim() })}\n\n`);
+        res.end();
+      } catch (err) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: String(err?.message || err) })}\n\n`);
+        res.end();
+      }
       return;
     }
 
@@ -2577,7 +2808,13 @@ async function requestHandler(req, res) {
 
       if (req.method === 'GET') {
         if (status.status === 'ready') {
-          sendJson(res, { status: 'ready', article: status.article });
+          let article = status.article;
+          try {
+            article = await decorateArticlePayload(status.article, { day: story.day, yearsForward: story.yearsForward, storyId });
+          } catch {
+            // ignore
+          }
+          sendJson(res, { status: 'ready', article });
           return;
         }
         sendJson(res, { status: status.status, startedAt: status.startedAt, storyId });
@@ -2591,7 +2828,13 @@ async function requestHandler(req, res) {
           return;
         }
         if (started.status === 'cached') {
-          sendJson(res, { status: 'ready', article: started.article });
+          let article = started.article;
+          try {
+            article = await decorateArticlePayload(started.article, { day: story.day, yearsForward: story.yearsForward, storyId });
+          } catch {
+            // ignore
+          }
+          sendJson(res, { status: 'ready', article });
           return;
         }
         sendJson(res, { status: started.status, storyId, years: story.yearsForward, day: story.day });

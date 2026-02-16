@@ -29,9 +29,11 @@ export function getOpusCurationConfigFromEnv() {
   const model = String(process.env.OPUS_MODEL || stored.model || modelDefault).trim() || modelDefault;
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
-  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 32000, 4000, 64000);
-  // Timeout must fit within Vercel's 300s function limit
-  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, 250000, 10000, 280000);
+  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 40000, 4000, 64000);
+  // On Vercel: 250s to fit within 300s limit. Locally: allow more time.
+  const isVercel = Boolean(process.env.VERCEL);
+  const defaultTimeout = isVercel ? 250000 : 500000;
+  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, defaultTimeout, 10000, 600000);
   const apiKey = apiKeyEnv || apiKeyStored;
   const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
   const systemPrompt =
@@ -155,8 +157,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
-    `- For KEY stories ONLY (max ${keyCount}): write a full draftArticle with body (~3-4 short paragraphs, NYT-style).`,
-    `- For NON-KEY stories: set draftArticle to null. Keep sparkDirections under 50 words. A fast model generates articles on demand.`,
+    `- For KEY stories (max ${keyCount}): write a full draftArticle with title, dek, body (3-4 paragraphs, NYT-style).`,
+    `- For NON-KEY stories: set draftArticle to null. Keep sparkDirections detailed (1-2 sentences describing the future event). A second pass generates bodies.`,
     `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
@@ -195,8 +197,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- confidence: integer 0-100 rating the plausibility of this prediction.`,
     aiExtrapolationBlock,
     `JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string or null for non-key stories"}}]}`,
-    `KEY stories must have a draftArticle with title, dek, and body (3-4 paragraphs). Non-key stories should have draftArticle:null — they will be generated on demand.`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"} or null for non-key}]}`,
+    `KEY stories must have a draftArticle with title, dek, and body (3-4 paragraphs). Non-key stories: draftArticle=null, sparkDirections required.`,
     ``,
     ``,
     `Story candidates (must use these storyIds exactly):`,
@@ -453,4 +455,73 @@ export async function generateEditionCurationPlan(input) {
   }
 
   throw new Error(`Unknown OPUS_MODE="${mode}" — no mock fallback available.`);
+}
+
+/**
+ * Generate short article bodies for stories that are missing them.
+ * Takes an array of { storyId, title, dek, sparkDirections, editionDate, section }
+ * Processes in batches to stay within timeout limits.
+ * Returns a Map<storyId, { title, dek, body }>.
+ */
+export async function generateMissingArticleBodies(stories, configOverride) {
+  if (!stories || !stories.length) return new Map();
+  const config = configOverride || getOpusCurationConfigFromEnv();
+  const mode = normalizeMode(config.mode);
+  if (mode !== 'anthropic') return new Map();
+
+  const isVercel = Boolean(process.env.VERCEL);
+  const BATCH_SIZE = isVercel ? 9 : 17;
+  const result = new Map();
+
+  const batches = [];
+  for (let i = 0; i < stories.length; i += BATCH_SIZE) {
+    batches.push(stories.slice(i, i + BATCH_SIZE));
+  }
+
+  for (const batch of batches) {
+    const editionDate = batch[0]?.editionDate || '';
+    const storyLines = batch.map((s, i) =>
+      `${i + 1}. storyId: ${s.storyId}\n   title: ${s.title}\n   dek: ${s.dek}\n   directions: ${s.sparkDirections || s.dek}`
+    ).join('\n');
+
+    const prompt = [
+      `You are a journalist writing for "The Future Times", a newspaper from ${editionDate}.`,
+      `Write a short article body for each story below. Each body: 1 concise paragraph (3-5 sentences), NYT-style, written as real news from ${editionDate}.`,
+      `Do NOT mention forecasts, predictions, AI, or that you are simulating. Write as fact.`,
+      `Do NOT include a Sources section. No section headings.`,
+      ``,
+      `Output STRICT JSON only. No markdown fences. Schema:`,
+      `{"articles":[{"storyId":"id","title":"string","dek":"string","body":"string"}]}`,
+      ``,
+      `Stories:`,
+      storyLines
+    ].join('\n');
+
+    const backfillConfig = {
+      ...config,
+      maxTokens: Math.min(config.maxTokens, 12000),
+      timeoutMs: isVercel ? 80000 : 180000,
+      model: 'claude-sonnet-4-5-20250929'
+    };
+
+    try {
+      const parsed = await callAnthropicJson(prompt, backfillConfig);
+      const articles = Array.isArray(parsed?.articles) ? parsed.articles : [];
+      for (const a of articles) {
+        const id = String(a?.storyId || '').trim();
+        const body = String(a?.body || '').trim();
+        if (id && body) {
+          result.set(id, {
+            title: String(a.title || '').trim(),
+            dek: String(a.dek || '').trim(),
+            body
+          });
+        }
+      }
+    } catch (err) {
+      console.error(`[backfill] Batch failed (${batch.length} stories):`, err?.message || err);
+    }
+  }
+
+  return result;
 }

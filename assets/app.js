@@ -1133,12 +1133,87 @@
       md.innerHTML = markdownToHtml(article.body || '');
     }
 
+    // Show "Read full article" button for short articles (backfilled 1-paragraph)
+    const expandWrap = document.getElementById('expandWrap');
+    const expandBtn = document.getElementById('expandBtn');
+    if (expandWrap && expandBtn) {
+      const bodyText = (article.body || '').trim();
+      const paragraphs = bodyText.split(/\n\s*\n/).filter(p => p.trim().length > 30);
+      const isShort = paragraphs.length <= 2 && bodyText.length < 1500;
+      expandWrap.style.display = isShort && bodyText.length > 50 ? '' : 'none';
+
+      if (isShort && bodyText.length > 50) {
+        const newBtn = expandBtn.cloneNode(true);
+        expandBtn.parentNode.replaceChild(newBtn, expandBtn);
+        newBtn.addEventListener('click', () => expandArticleBody(article.id));
+      }
+    }
+
     const statusBlock = document.getElementById('renderStatus');
     if (statusBlock && !options.partial) {
       statusBlock.style.display = options.cached ? 'none' : statusBlock.style.display;
       if (statusBlock.style.display === '') {
         statusBlock.style.display = 'block';
       }
+    }
+  }
+
+  async function expandArticleBody(articleId) {
+    const expandWrap = document.getElementById('expandWrap');
+    const expandBtn = document.getElementById('expandBtn');
+    const expandStatus = document.getElementById('expandStatus');
+    const md = document.getElementById('md');
+    if (!md || !articleId) return;
+
+    if (expandBtn) { expandBtn.disabled = true; expandBtn.textContent = 'Expanding…'; }
+    if (expandStatus) expandStatus.textContent = 'Connecting to Sonnet…';
+
+    try {
+      const resp = await fetch(`/api/article/${encodeURIComponent(articleId)}/expand`, { method: 'POST' });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullBody = '';
+
+      if (expandStatus) expandStatus.textContent = 'Writing full article…';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (!d) continue;
+          try {
+            const evt = JSON.parse(d);
+            if (evt.type === 'chunk' && evt.delta) {
+              fullBody += evt.delta;
+              md.innerHTML = markdownToHtml(fullBody);
+            } else if (evt.type === 'complete') {
+              fullBody = evt.body || fullBody;
+              md.innerHTML = markdownToHtml(fullBody);
+            } else if (evt.type === 'error') {
+              throw new Error(evt.error || 'Expansion failed');
+            }
+          } catch (e) {
+            if (e.message !== 'Expansion failed') { /* skip parse errors */ }
+            else throw e;
+          }
+        }
+      }
+
+      if (expandWrap) expandWrap.style.display = 'none';
+      if (expandStatus) expandStatus.textContent = '';
+    } catch (err) {
+      if (expandBtn) { expandBtn.disabled = false; expandBtn.textContent = 'Read full article'; }
+      if (expandStatus) { expandStatus.textContent = 'Failed: ' + (err.message || err); expandStatus.style.color = '#c0392b'; }
     }
   }
 

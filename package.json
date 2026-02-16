@@ -14,6 +14,9 @@
     "worker": "node server/worker.js"
   },
   "dependencies": {
+    "@vercel/blob": "^2.2.0",
+    "@vercel/postgres": "^0.10.0",
+    "better-sqlite3": "^12.6.2",
     "ws": "^8.18.0"
   }
 }

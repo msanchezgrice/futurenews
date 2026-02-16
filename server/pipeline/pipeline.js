@@ -73,7 +73,7 @@ import {
   stableHash,
   tokenize
 } from './utils.js';
-import { buildEditionCurationPrompt, generateEditionCurationPlan, getOpusCurationConfigFromEnv } from './curation.js';
+import { buildEditionCurationPrompt, generateEditionCurationPlan, getOpusCurationConfigFromEnv, generateMissingArticleBodies } from './curation.js';
 
 const DEFAULT_DB_FILE = path.resolve(process.cwd(), 'data', 'future-times.sqlite');
 const DEFAULT_SOURCES_FILE = path.resolve(process.cwd(), 'config', 'sources.json');
@@ -2146,7 +2146,7 @@ export class FutureTimesPipeline {
           let articleJson = null;
           const draft = entry && entry.draftArticle && typeof entry.draftArticle === 'object' ? entry.draftArticle : null;
           const draftBody = draft ? String(draft.body || '').trim() : '';
-          if (key && draftBody) {
+          if (draftBody) {
             const pack = candidate.evidencePack || {};
             const signals = Array.isArray(pack.signals) ? pack.signals : [];
             const markets = Array.isArray(pack.markets) ? pack.markets : [];
@@ -2183,9 +2183,9 @@ export class FutureTimesPipeline {
               }
             }
 
-            // Make the key story instant-load by populating the normal render cache.
+            // Pre-populate the render cache so this story loads instantly.
             this.storeRendered(storyId, articleJson, { curationGeneratedAt: generatedAt });
-            keyStories++;
+            if (key) keyStories++;
           }
 
           upsert.run(
@@ -2201,6 +2201,74 @@ export class FutureTimesPipeline {
             articleJson ? safeJson(articleJson, {}) : null
           );
           curatedStories++;
+        }
+
+        // ── Backfill: generate bodies for curated stories that came back without draftArticle ──
+        const cappedIds = (candidates || []).slice(0, 20);
+        const missingBodyStories = [];
+        for (const candidate of cappedIds) {
+          const sid = String(candidate.storyId || '').trim();
+          if (!sid) continue;
+          const entry = byId.get(sid) || {};
+          const hasDraft = entry.draftArticle && typeof entry.draftArticle === 'object' && String(entry.draftArticle.body || '').trim().length > 50;
+          if (!hasDraft) {
+            const conf = Number(entry.confidence ?? 0);
+            if (conf <= 0) continue;
+            missingBodyStories.push({
+              storyId: sid,
+              title: String(entry.curatedTitle || candidate.title || '').trim(),
+              dek: String(entry.curatedDek || candidate.dek || '').trim(),
+              sparkDirections: String(entry.sparkDirections || '').trim(),
+              editionDate,
+              section: candidate.section
+            });
+          }
+        }
+
+        if (missingBodyStories.length > 0) {
+          this.traceEvent(normalized, 'curate.backfill.start', { yearsForward, missing: missingBodyStories.length });
+          const backfilled = await generateMissingArticleBodies(missingBodyStories, config);
+          this.traceEvent(normalized, 'curate.backfill.end', { yearsForward, generated: backfilled.size });
+
+          for (const [sid, draft] of backfilled) {
+            const candidate = cappedIds.find(c => String(c.storyId || '').trim() === sid);
+            if (!candidate) continue;
+            const entry = byId.get(sid) || {};
+            const curatedTitle = String(entry.curatedTitle || candidate.title || '').trim();
+            const curatedDek = String(entry.curatedDek || candidate.dek || '').trim();
+            const pack = candidate.evidencePack || {};
+            const title = String(draft.title || curatedTitle).trim() || curatedTitle;
+            const dek = String(draft.dek || curatedDek).trim() || curatedDek;
+            const backfilledArticle = {
+              id: sid,
+              section: candidate.section,
+              title,
+              dek,
+              meta: `${candidate.section} • ${editionDate}`,
+              image: 'assets/img/humanoids-labor-market.svg',
+              body: draft.body,
+              signals: Array.isArray(pack.signals) ? pack.signals : [],
+              markets: Array.isArray(pack.markets) ? pack.markets : [],
+              prompt: `Editorial photo illustration prompt: ${title}. Documentary realism. Dated ${editionDate}.`,
+              citations: Array.isArray(pack.citations) ? pack.citations : [],
+              stats: { econ: pack.econ || {}, markets: pack.markets || [] },
+              editionDate,
+              generatedFrom: `sonnet-backfill / ${normalized}`,
+              generatedAt: isoNow(),
+              curationGeneratedAt: generatedAt,
+              yearsForward
+            };
+            this.storeRendered(sid, backfilledArticle, { curationGeneratedAt: generatedAt });
+
+            // Update the story_curations row with the backfilled article
+            const existingRow = this.db.prepare('SELECT plan_json FROM story_curations WHERE story_id=? AND day=? AND years_forward=?').get(sid, normalized, yearsForward);
+            if (existingRow) {
+              const existingPlan = safeParseJson(existingRow.plan_json, {});
+              existingPlan.draftArticle = { title, dek, body: draft.body };
+              this.db.prepare('UPDATE story_curations SET plan_json=?, article_json=? WHERE story_id=? AND day=? AND years_forward=?')
+                .run(safeJson(existingPlan, {}), safeJson(backfilledArticle, {}), sid, normalized, yearsForward);
+            }
+          }
         }
 
         editionCount++;
@@ -2453,6 +2521,35 @@ export class FutureTimesPipeline {
         } : null
       };
 
+      let articleJson = null;
+      const draft = entry.draftArticle && typeof entry.draftArticle === 'object' ? entry.draftArticle : null;
+      const draftBody = draft ? String(draft.body || '').trim() : '';
+      if (draftBody) {
+        const pack = candidate.evidencePack || {};
+        const title = String(draft.title || curatedTitle || candidate.title || '').trim() || curatedTitle;
+        const dek = String(draft.dek || curatedDek || candidate.dek || '').trim() || curatedDek;
+        articleJson = {
+          id: storyId,
+          section: candidate.section,
+          title,
+          dek,
+          meta: `${candidate.section} • ${editionDate}`,
+          image: 'assets/img/humanoids-labor-market.svg',
+          body: draftBody,
+          signals: Array.isArray(pack.signals) ? pack.signals : [],
+          markets: Array.isArray(pack.markets) ? pack.markets : [],
+          prompt: `Editorial photo illustration prompt: ${title}. Documentary realism. Dated ${editionDate}.`,
+          citations: Array.isArray(pack.citations) ? pack.citations : [],
+          stats: { econ: pack.econ || {}, markets: pack.markets || [] },
+          editionDate,
+          generatedFrom: `opus-curator / ${normalized}`,
+          generatedAt,
+          curationGeneratedAt: generatedAt,
+          yearsForward: y
+        };
+        this.storeRendered(storyId, articleJson, { curationGeneratedAt: generatedAt });
+      }
+
       upsert.run(
         storyId,
         normalized,
@@ -2463,7 +2560,7 @@ export class FutureTimesPipeline {
         model,
         key ? 1 : 0,
         safeJson(normalizedPlan, {}),
-        null
+        articleJson ? safeJson(articleJson, {}) : null
       );
     }
 
