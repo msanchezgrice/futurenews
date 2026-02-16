@@ -61,8 +61,10 @@ function toNumber(value, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-function normalizeIdea(idea, idx) {
-  const rank = Number.isFinite(Number(idea?.rank)) ? Math.max(1, Math.round(Number(idea.rank))) : idx + 1;
+function normalizeIdea(idea, idx, baseRank = 1) {
+  const rank = Number.isFinite(Number(idea?.rank))
+    ? Math.max(1, Math.round(Number(idea.rank)))
+    : Math.max(1, Math.round(Number(baseRank) || 1) + idx);
   const score = toNumber(idea?.score, 0);
   const confidence = Number.isFinite(Number(idea?.confidence))
     ? Math.max(0, Math.min(100, Math.round(Number(idea.confidence))))
@@ -101,10 +103,14 @@ function buildAttemptCounts(requestedCount) {
   return [base, 30];
 }
 
-function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations, count }) {
+function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations, count, rankStart = 1, rankEnd = null, excludeTitles = [] }) {
   const editionDate = clampText(edition?.date || '', 60);
   const baselineYear = String(day).slice(0, 4) || '2026';
   const targetYear = String(Number(baselineYear) + Number(yearsForward));
+  const rangeStart = Math.max(1, Math.round(Number(rankStart) || 1));
+  const rangeEnd = rankEnd ? Math.max(rangeStart, Math.round(Number(rankEnd) || rangeStart)) : null;
+  const rangeCount = rangeEnd ? rangeEnd - rangeStart + 1 : Math.max(1, Math.round(Number(count) || 1));
+  const excludeList = Array.isArray(excludeTitles) ? excludeTitles.map((t) => clampText(t, 120)).filter(Boolean).slice(0, 60) : [];
   const articles = Array.isArray(edition?.articles) ? edition.articles : [];
   const topPerSection = new Map();
   for (const a of articles) {
@@ -172,9 +178,11 @@ function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations
     `You are Opus 4.6 acting as a high-quality daily "future objects" editor for The Future Times.`,
     `Return JSON only. No markdown fences. No extra text.`,
     ``,
-    `Goal: produce a stack-ranked list of ${count} HIGH-CONFIDENCE physical/digital objects that plausibly exist by the edition date.`,
+    `Goal: produce a stack-ranked list of ${rangeCount} HIGH-CONFIDENCE physical/digital objects that plausibly exist by the edition date.`,
     `These objects should be directly suggested by today's baseline signals and the +${yearsForward}y newspaper edition themes.`,
     `Do NOT include any image prompt fields. We derive image prompts later.`,
+    rangeEnd ? `You are generating ranks ${rangeStart}-${rangeEnd} (inclusive). Set idea.rank accordingly.` : `Ranks should start at ${rangeStart}.`,
+    excludeList.length ? `Do NOT repeat any of these titles: ${excludeList.map((x) => `"${x}"`).join(', ')}` : null,
     ``,
     `Edition context:`,
     `- Baseline day: ${day}`,
@@ -235,109 +243,123 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
 
   const system =
     'You are a careful editor. Respond by calling the deliver_future_ideas tool with a single JSON object. Do not include any text.';
-  const attempts = buildAttemptCounts(count);
-  let parsed = null;
-  let model = '';
-  let toolUsed = false;
-  let usedCount = attempts[0] || Math.max(1, Math.min(200, Math.round(Number(count) || 50)));
-  let lastErr = null;
+  const requestedCount = Math.max(1, Math.min(200, Math.round(Number(count) || 30)));
   const startedAt = Date.now();
   const maxTotalMs = 220000; // Keep well under Vercel maxDuration.
 
-  for (const attemptCount of attempts) {
+  const candidatesAll = getIdeasModelCandidates();
+  const primaryModel = String(candidatesAll[0] || '').trim();
+  const fallbackModels = candidatesAll.filter((m) => String(m || '').trim() && String(m || '').trim() !== primaryModel);
+
+  async function callIdeasOnce({ prompt, timeoutMs, maxTokens }) {
+    let resp;
+    try {
+      resp = await callAnthropicJson({
+        modelCandidates: primaryModel ? [primaryModel] : candidatesAll,
+        system,
+        user: prompt,
+        maxTokens,
+        temperature: 0.4,
+        timeoutMs,
+        tool: IDEAS_TOOL
+      });
+    } catch (err) {
+      if (String(err?.code || '') === 'anthropic_timeout' && fallbackModels.length) {
+        resp = await callAnthropicJson({
+          modelCandidates: fallbackModels,
+          system,
+          user: prompt,
+          maxTokens,
+          temperature: 0.4,
+          timeoutMs: Math.min(75000, Math.max(25000, timeoutMs - 15000)),
+          tool: IDEAS_TOOL
+        });
+      } else {
+        throw err;
+      }
+    }
+    return resp;
+  }
+
+  const chunkSize = requestedCount <= 8 ? requestedCount : 8;
+  const allIdeas = [];
+  const seenTitles = new Set();
+  let model = '';
+
+  for (let startRank = 1; startRank <= requestedCount; startRank += chunkSize) {
+    const endRank = Math.min(requestedCount, startRank + chunkSize - 1);
+    const chunkCount = endRank - startRank + 1;
     const elapsed = Date.now() - startedAt;
     const remaining = maxTotalMs - elapsed;
-    if (remaining < 25000) break;
+    if (remaining < 25000) {
+      return { ok: false, error: 'ideas_generate_failed', code: 'time_budget_exhausted', detail: `Remaining budget ${remaining}ms`, attemptedCounts: [requestedCount] };
+    }
     const timeoutMs = Math.min(110000, Math.max(25000, remaining - 5000));
-    const maxTokens = attemptCount <= 30 ? 4200 : 5200;
+    const maxTokens = 2600;
+    const excludeTitles = Array.from(seenTitles).slice(0, 60);
     const prompt = buildIdeasPrompt({
       day: builtDay,
       yearsForward,
       edition,
       snapshot,
       storyCurations,
-      count: attemptCount
+      count: chunkCount,
+      rankStart: startRank,
+      rankEnd: endRank,
+      excludeTitles
     });
-    try {
-      console.log('[future_images] refreshIdeas attempt', { attemptCount, timeoutMs, maxTokens });
-      const candidatesAll = getIdeasModelCandidates();
-      const primaryModel = String(candidatesAll[0] || '').trim();
-      const fallbackModels = candidatesAll.filter((m) => String(m || '').trim() && String(m || '').trim() !== primaryModel);
 
-      let resp;
-      try {
-        resp = await callAnthropicJson({
-          modelCandidates: primaryModel ? [primaryModel] : candidatesAll,
-          system,
-          user: prompt,
-          maxTokens,
-          temperature: 0.4,
-          timeoutMs,
-          tool: IDEAS_TOOL
-        });
-      } catch (err) {
-        // Opus can be slow; fall back to faster models if we have time budget remaining.
-        if (String(err?.code || '') === 'anthropic_timeout' && fallbackModels.length) {
-          const elapsed2 = Date.now() - startedAt;
-          const remaining2 = maxTotalMs - elapsed2;
-          const timeout2 = Math.min(75000, Math.max(25000, remaining2 - 5000));
-          console.warn('[future_images] refreshIdeas primary timeout; trying fallback models', { timeout2, fallbackModels });
-          resp = await callAnthropicJson({
-            modelCandidates: fallbackModels,
-            system,
-            user: prompt,
-            maxTokens,
-            temperature: 0.4,
-            timeoutMs: timeout2,
-            tool: IDEAS_TOOL
-          });
-        } else {
-          throw err;
-        }
-      }
-      parsed = resp.parsed;
-      model = resp.model;
-      toolUsed = Boolean(resp.toolUsed);
-      usedCount = attemptCount;
-      console.log('[future_images] refreshIdeas ok', { attemptCount, model });
-      break;
+    console.log('[future_images] refreshIdeas chunk', { startRank, endRank, timeoutMs, maxTokens });
+    let resp;
+    try {
+      resp = await callIdeasOnce({ prompt, timeoutMs, maxTokens });
     } catch (err) {
-      lastErr = err;
-      console.warn('[future_images] refreshIdeas failed', {
-        attemptCount,
+      return {
+        ok: false,
+        error: 'ideas_generate_failed',
         code: String(err?.code || ''),
-        message: String(err?.message || err || '')
-      });
+        detail: String(err?.message || err || 'Anthropic ideas generation failed'),
+        attemptedCounts: [requestedCount]
+      };
+    }
+
+    model = resp.model || model;
+    const parsed = resp.parsed;
+    const toolUsed = Boolean(resp.toolUsed);
+    const rawIdeas = Array.isArray(parsed?.ideas)
+      ? parsed.ideas
+      : Array.isArray(parsed)
+        ? parsed
+        : Array.isArray(parsed?.items)
+          ? parsed.items
+          : [];
+    const chunkIdeas = rawIdeas.slice(0, Math.max(1, Math.min(50, chunkCount))).map((x, i) => normalizeIdea(x, i, startRank));
+
+    if (!chunkIdeas.length) {
+      const parsedType = Array.isArray(parsed) ? 'array' : typeof parsed;
+      const keys = parsed && typeof parsed === 'object' ? Object.keys(parsed).slice(0, 24) : [];
+      return { ok: false, error: 'no_ideas_returned', day: builtDay, yearsForward, toolUsed, parsedType, keys, chunk: { startRank, endRank } };
+    }
+
+    allIdeas.push(...chunkIdeas);
+    for (const it of chunkIdeas) {
+      const t = String(it?.title || '').trim();
+      if (t) seenTitles.add(t);
     }
   }
 
-  if (!parsed) {
-    return {
-      ok: false,
-      error: 'ideas_generate_failed',
-      code: String(lastErr?.code || ''),
-      detail: String(lastErr?.message || lastErr || 'Anthropic ideas generation failed'),
-      attemptedCounts: attempts
-    };
-  }
+  const ideas = allIdeas
+    .filter((x) => x && typeof x === 'object')
+    .sort((a, b) => (Number(a.rank) || 0) - (Number(b.rank) || 0))
+    .slice(0, requestedCount);
 
-  const ideasRaw = Array.isArray(parsed?.ideas)
-    ? parsed.ideas
-    : Array.isArray(parsed)
-      ? parsed
-      : Array.isArray(parsed?.items)
-        ? parsed.items
-        : [];
-  const ideas = ideasRaw.slice(0, Math.max(1, Math.min(200, usedCount))).map(normalizeIdea);
   if (!ideas.length) {
-    const parsedType = Array.isArray(parsed) ? 'array' : typeof parsed;
-    const keys = parsed && typeof parsed === 'object' ? Object.keys(parsed).slice(0, 24) : [];
-    return { ok: false, error: 'no_ideas_returned', day: builtDay, yearsForward, toolUsed, parsedType, keys };
+    return { ok: false, error: 'no_ideas_returned', day: builtDay, yearsForward, parsedType: 'none', keys: [] };
   }
 
   // Persist ideas (stable IDs per day+rank so on-demand images stay attached across refreshes).
-  const generatedAt = String(parsed?.generatedAt || '').trim() || new Date().toISOString();
-  const providerModel = String(parsed?.model || model || '').trim() || 'claude-opus-4-6';
+  const generatedAt = new Date().toISOString();
+  const providerModel = String(model || '').trim() || 'claude-opus-4-6';
 
   // Best-effort: clear out existing ranks for this day.
   await pgQuery(`DELETE FROM ft_future_ideas WHERE day=$1 AND years_forward=$2;`, [builtDay, yearsForward]);
