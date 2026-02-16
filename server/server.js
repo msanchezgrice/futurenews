@@ -34,8 +34,7 @@ const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
-const MIN_PUBLISHED_BODY_CHARS = Math.max(140, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 220));
-const MIN_PUBLISHED_CONFIDENCE = Math.max(1, Math.min(100, Number(process.env.FT_MIN_PUBLISHED_CONFIDENCE || 60)));
+const MIN_PUBLISHED_BODY_CHARS = Math.max(80, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 120));
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -197,8 +196,6 @@ function hasRenderableBody(article, minChars = 140) {
 function hasPublishableHeadlineAndDek(article) {
   const title = String(article?.title || '').trim();
   if (!title || title.length < 8) return false;
-  const confidence = Number(article?.confidence ?? article?.curation?.confidence ?? 0);
-  if (Number.isFinite(confidence) && confidence > 0 && confidence < MIN_PUBLISHED_CONFIDENCE) return false;
   return true;
 }
 
