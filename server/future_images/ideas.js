@@ -199,13 +199,13 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
   let usedCount = attempts[0] || Math.max(1, Math.min(200, Math.round(Number(count) || 50)));
   let lastErr = null;
   const startedAt = Date.now();
-  const maxTotalMs = 190000; // Keep well under Vercel maxDuration.
+  const maxTotalMs = 220000; // Keep well under Vercel maxDuration.
 
   for (const attemptCount of attempts) {
     const elapsed = Date.now() - startedAt;
     const remaining = maxTotalMs - elapsed;
     if (remaining < 25000) break;
-    const timeoutMs = Math.min(75000, Math.max(25000, remaining - 5000));
+    const timeoutMs = Math.min(110000, Math.max(25000, remaining - 5000));
     const maxTokens = attemptCount <= 30 ? 4200 : 5200;
     const prompt = buildIdeasPrompt({
       day: builtDay,
@@ -217,14 +217,39 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
     });
     try {
       console.log('[future_images] refreshIdeas attempt', { attemptCount, timeoutMs, maxTokens });
-      const resp = await callAnthropicJson({
-        modelCandidates: getIdeasModelCandidates(),
-        system,
-        user: prompt,
-        maxTokens,
-        temperature: 0.4,
-        timeoutMs
-      });
+      const candidatesAll = getIdeasModelCandidates();
+      const primaryModel = String(candidatesAll[0] || '').trim();
+      const fallbackModels = candidatesAll.filter((m) => String(m || '').trim() && String(m || '').trim() !== primaryModel);
+
+      let resp;
+      try {
+        resp = await callAnthropicJson({
+          modelCandidates: primaryModel ? [primaryModel] : candidatesAll,
+          system,
+          user: prompt,
+          maxTokens,
+          temperature: 0.4,
+          timeoutMs
+        });
+      } catch (err) {
+        // Opus can be slow; fall back to faster models if we have time budget remaining.
+        if (String(err?.code || '') === 'anthropic_timeout' && fallbackModels.length) {
+          const elapsed2 = Date.now() - startedAt;
+          const remaining2 = maxTotalMs - elapsed2;
+          const timeout2 = Math.min(75000, Math.max(25000, remaining2 - 5000));
+          console.warn('[future_images] refreshIdeas primary timeout; trying fallback models', { timeout2, fallbackModels });
+          resp = await callAnthropicJson({
+            modelCandidates: fallbackModels,
+            system,
+            user: prompt,
+            maxTokens,
+            temperature: 0.4,
+            timeoutMs: timeout2
+          });
+        } else {
+          throw err;
+        }
+      }
       parsed = resp.parsed;
       model = resp.model;
       usedCount = attemptCount;
