@@ -2976,6 +2976,39 @@ async function requestHandler(req, res) {
           sendJson(res, { status: 'ready', article });
           return;
         }
+        if (status.status === 'queued' || status.status === 'streaming') {
+          const started = startRenderJob(storyId, story);
+          if (started.status === 'cached' && started.article) {
+            let article = started.article;
+            try {
+              article = await decorateArticlePayload(started.article, { day: story.day, yearsForward: story.yearsForward, storyId });
+            } catch {
+              // ignore
+            }
+            sendJson(res, { status: 'ready', article });
+            return;
+          }
+          if (started.status === 'started' || started.status === 'running') {
+            const active = started.job || getActiveJob(started.key);
+            if (active) {
+              const awaited = await waitForRenderJob(active, 130000);
+              if (awaited.status === 'ready' && awaited.article) {
+                let article = awaited.article;
+                try {
+                  article = await decorateArticlePayload(awaited.article, { day: story.day, yearsForward: story.yearsForward, storyId });
+                } catch {
+                  // ignore
+                }
+                sendJson(res, { status: 'ready', article });
+                return;
+              }
+              if (awaited.status === 'error') {
+                sendJson(res, { status: 'error', storyId, error: awaited.error }, 500);
+                return;
+              }
+            }
+          }
+        }
         sendJson(res, { status: status.status, startedAt: status.startedAt, storyId });
         return;
       }
