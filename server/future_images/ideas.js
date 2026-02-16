@@ -54,14 +54,8 @@ function normalizeIdea(idea, idx) {
 
 function buildAttemptCounts(requestedCount) {
   const base = Math.max(1, Math.min(200, Math.round(Number(requestedCount) || 50)));
-  const out = [];
-  let n = base;
-  for (let i = 0; i < 3; i++) {
-    if (!out.includes(n)) out.push(n);
-    if (n <= 20) break;
-    n = Math.max(10, Math.floor(n * 0.6));
-  }
-  return out;
+  if (base <= 30) return [base];
+  return [base, 30];
 }
 
 function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations, count }) {
@@ -190,6 +184,7 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
 
   const normalized = normalizeDay(day) || formatDay();
   const builtDay = await pipeline.ensureDayBuilt(normalized);
+  console.log('[future_images] refreshIdeas', { day: builtDay, yearsForward, count: Number(count) || 0, force: Boolean(force) });
   const edition = pipeline.getEdition(builtDay, yearsForward);
   if (!edition) return { ok: false, error: 'edition_not_found', day: builtDay, yearsForward };
 
@@ -203,8 +198,15 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
   let model = '';
   let usedCount = attempts[0] || Math.max(1, Math.min(200, Math.round(Number(count) || 50)));
   let lastErr = null;
+  const startedAt = Date.now();
+  const maxTotalMs = 190000; // Keep well under Vercel maxDuration.
 
   for (const attemptCount of attempts) {
+    const elapsed = Date.now() - startedAt;
+    const remaining = maxTotalMs - elapsed;
+    if (remaining < 25000) break;
+    const timeoutMs = Math.min(75000, Math.max(25000, remaining - 5000));
+    const maxTokens = attemptCount <= 30 ? 4200 : 5200;
     const prompt = buildIdeasPrompt({
       day: builtDay,
       yearsForward,
@@ -214,20 +216,27 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
       count: attemptCount
     });
     try {
+      console.log('[future_images] refreshIdeas attempt', { attemptCount, timeoutMs, maxTokens });
       const resp = await callAnthropicJson({
         modelCandidates: getIdeasModelCandidates(),
         system,
         user: prompt,
-        maxTokens: 5200,
+        maxTokens,
         temperature: 0.4,
-        timeoutMs: 120000
+        timeoutMs
       });
       parsed = resp.parsed;
       model = resp.model;
       usedCount = attemptCount;
+      console.log('[future_images] refreshIdeas ok', { attemptCount, model });
       break;
     } catch (err) {
       lastErr = err;
+      console.warn('[future_images] refreshIdeas failed', {
+        attemptCount,
+        code: String(err?.code || ''),
+        message: String(err?.message || err || '')
+      });
     }
   }
 

@@ -93,10 +93,6 @@ export async function callAnthropicJson({ modelCandidates, system, user, maxToke
       return { ok: true, model, parsed, text };
     } catch (err) {
       lastErr = err;
-      if (err && String(err.code || '') === 'anthropic_parse_failed') {
-        // Try the next model candidate; some models are more compliant with JSON.
-        continue;
-      }
       // If it was an abort, try next model? Better to fail fast.
       if (err && String(err.name || '') === 'AbortError') {
         const e = new Error(`Anthropic request timed out after ${timeoutMs}ms (model=${model})`);

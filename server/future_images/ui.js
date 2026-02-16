@@ -2,7 +2,8 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
   const dayParam = encodeURIComponent(String(day || ''));
   const yearsParam = encodeURIComponent(String(yearsForward || 5));
   const stateUrl = `/api/admin/images/state?day=${dayParam}&years=${yearsParam}`;
-  const refreshIdeasUrl = `/api/admin/images/ideas/refresh?day=${dayParam}&years=${yearsParam}`;
+  // Default to a conservative count so the LLM call reliably fits within serverless timeouts.
+  const refreshIdeasUrl = `/api/admin/images/ideas/refresh?day=${dayParam}&years=${yearsParam}&count=30`;
   const refreshNewspaperUrl = `/api/admin/images/newspaper/refresh?day=${dayParam}&years=${yearsParam}`;
   const runWorkerUrl = `/api/admin/images/jobs/run?day=${dayParam}&years=${yearsParam}`;
 

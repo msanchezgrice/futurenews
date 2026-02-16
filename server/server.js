@@ -1919,7 +1919,8 @@ async function requestHandler(req, res) {
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
       const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
       const force = String(url.searchParams.get('force') || '').toLowerCase() === 'true';
-      const count = Number(url.searchParams.get('count') || 50);
+      // Keep default small enough to reliably fit within serverless timeouts.
+      const count = Number(url.searchParams.get('count') || 30);
       const result = await refreshIdeas({ day: requestedDay, pipeline, yearsForward, count, force });
       sendJson(res, result, result && result.ok ? 200 : 400);
       return;
