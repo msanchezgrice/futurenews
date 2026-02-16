@@ -187,6 +187,11 @@ function keyFor(storyId, story = null) {
   }
 }
 
+function hasRenderableBody(article, minChars = 140) {
+  const body = String(article?.body || '').trim();
+  return body.length >= minChars;
+}
+
 function splitToChunks(text, size) {
   const normalized = String(text || '');
   if (!normalized) return [];
@@ -658,9 +663,9 @@ function getActiveJob(key) {
 function getArticleStatus(storyId, story = null) {
   const key = keyFor(storyId, story);
   const mem = cacheByKey.get(key);
-  if (mem) return { status: 'ready', article: mem };
+  if (mem && hasRenderableBody(mem)) return { status: 'ready', article: mem };
   const dbCached = pipeline.getRenderedVariant(storyId, { curationGeneratedAt: story?.curation?.generatedAt || '' });
-  if (dbCached) {
+  if (dbCached && hasRenderableBody(dbCached)) {
     cacheByKey.set(key, dbCached);
     return { status: 'ready', article: dbCached };
   }
@@ -692,7 +697,7 @@ function startRenderJob(storyId, story = null) {
   const key = keyFor(storyId, resolvedStory);
   const cached =
     cacheByKey.get(key) || pipeline.getRenderedVariant(storyId, { curationGeneratedAt: resolvedStory?.curation?.generatedAt || '' });
-  if (cached) {
+  if (cached && hasRenderableBody(cached)) {
     cacheByKey.set(key, cached);
     return { status: 'cached', key, article: cached, job: null };
   }
@@ -745,6 +750,20 @@ function startRenderJob(storyId, story = null) {
   });
 
   return { status: 'started', key, article: null, job };
+}
+
+async function waitForRenderJob(job, timeoutMs = 130000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (job.complete && hasRenderableBody(job.result)) {
+      return { status: 'ready', article: job.result };
+    }
+    if (job.status === 'error') {
+      return { status: 'error', error: String(job.error || 'Render failed') };
+    }
+    await sleep(120);
+  }
+  return { status: 'timeout' };
 }
 
 function normalizePath(urlPath) {
@@ -2127,6 +2146,7 @@ async function requestHandler(req, res) {
 
       let rendered = 0;
       let missing = 0;
+      let skippedNoBody = 0;
       for (const storyId of storyIds) {
         const story = pipeline.getStory(storyId);
         if (!story) {
@@ -2134,6 +2154,10 @@ async function requestHandler(req, res) {
           continue;
         }
         const seedArticle = buildSeedArticleFromStory(story);
+        if (!hasRenderableBody(seedArticle)) {
+          skippedNoBody++;
+          continue;
+        }
         pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: story?.curation?.generatedAt || null });
         cacheByKey.set(keyFor(storyId, story), seedArticle);
         rendered++;
@@ -2145,7 +2169,8 @@ async function requestHandler(req, res) {
         years: yearsList,
         stories: storyIds.length,
         rendered,
-        missing
+        missing,
+        skippedNoBody
       });
       return;
     }
@@ -2970,6 +2995,26 @@ async function requestHandler(req, res) {
           }
           sendJson(res, { status: 'ready', article });
           return;
+        }
+        if (started.status === 'started' || started.status === 'running') {
+          const active = started.job || getActiveJob(started.key);
+          if (active) {
+            const awaited = await waitForRenderJob(active, 130000);
+            if (awaited.status === 'ready' && awaited.article) {
+              let article = awaited.article;
+              try {
+                article = await decorateArticlePayload(awaited.article, { day: story.day, yearsForward: story.yearsForward, storyId });
+              } catch {
+                // ignore
+              }
+              sendJson(res, { status: 'ready', article });
+              return;
+            }
+            if (awaited.status === 'error') {
+              sendJson(res, { status: 'error', storyId, error: awaited.error }, 500);
+              return;
+            }
+          }
         }
         sendJson(res, { status: started.status, storyId, years: story.yearsForward, day: story.day });
         return;
