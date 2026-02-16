@@ -3146,8 +3146,12 @@ async function requestHandler(req, res) {
     if (pathname.startsWith('/api/edition')) {
       if (req.method !== 'GET') return send405(res, 'GET');
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
-      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
-      const payload = pipeline.getEdition(builtDay, years);
+      let builtDay = requestedDay;
+      let payload = pipeline.getEdition(builtDay, years);
+      if (!payload) {
+        builtDay = await pipeline.ensureDayBuilt(requestedDay);
+        payload = pipeline.getEdition(builtDay, years);
+      }
       if (!payload) {
         sendJson(res, { error: 'edition_not_found', day: builtDay, years }, 404);
         return;
