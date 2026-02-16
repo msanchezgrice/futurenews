@@ -1,6 +1,31 @@
 import { getFutureImagesFlags } from './config.js';
 import { ensureFutureImagesSchema, pgQuery } from './postgres.js';
 
+const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
+
+function isRenderableArticleImage(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  for (const marker of BLOCKED_IMAGE_MARKERS) {
+    if (lower.includes(marker)) return false;
+  }
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    if (lower.includes('.public.blob.vercel-storage.com/')) return true;
+    if (lower.includes('/assets/img/generated/')) return true;
+    if (lower.includes('/assets/img/library/')) return true;
+    return false;
+  }
+  if (lower.startsWith('assets/img/generated/') || lower.startsWith('/assets/img/generated/')) return true;
+  if (lower.startsWith('assets/img/library/') || lower.startsWith('/assets/img/library/')) return true;
+  return false;
+}
+
+function sanitizeArticleImage(value) {
+  const raw = String(value || '').trim();
+  return isRenderableArticleImage(raw) ? raw : '';
+}
+
 async function lookupStoryAssets(day, yearsForward, storyIds) {
   const ids = Array.isArray(storyIds) ? storyIds.map((x) => String(x || '').trim()).filter(Boolean) : [];
   if (!ids.length) return new Map();
@@ -35,43 +60,49 @@ async function lookupSingleStoryAsset(day, yearsForward, storyId) {
 }
 
 export async function decorateEditionPayload(payload, { day, yearsForward } = {}) {
-  const flags = getFutureImagesFlags();
-  if (!flags.imagesEnabled) return payload;
   if (!payload || typeof payload !== 'object') return payload;
-  if (Number(yearsForward) !== 5) return payload;
+  const baseArticles = (Array.isArray(payload.articles) ? payload.articles : []).map((a) => ({
+    ...a,
+    image: sanitizeArticleImage(a?.image)
+  }));
+  const basePayload = { ...payload, articles: baseArticles };
+
+  const flags = getFutureImagesFlags();
+  if (!flags.imagesEnabled) return basePayload;
+  if (Number(yearsForward) !== 5) return basePayload;
+
+  if (!baseArticles.length) return basePayload;
 
   const schema = await ensureFutureImagesSchema();
-  if (!schema.ok) return payload;
+  if (!schema.ok) return basePayload;
 
-  const articles = Array.isArray(payload.articles) ? payload.articles : [];
-  if (!articles.length) return payload;
-
-  const ids = articles.map((a) => String(a?.id || '').trim()).filter(Boolean);
+  const ids = baseArticles.map((a) => String(a?.id || '').trim()).filter(Boolean);
   const assets = await lookupStoryAssets(day, yearsForward, ids);
-  if (!assets.size) return payload;
+  if (!assets.size) return basePayload;
 
-  const patched = articles.map((a) => {
+  const patched = baseArticles.map((a) => {
     const id = String(a?.id || '').trim();
     const asset = id ? assets.get(id) : null;
     if (!asset || !asset.url) return a;
     return { ...a, image: asset.url };
   });
 
-  return { ...payload, articles: patched };
+  return { ...basePayload, articles: patched };
 }
 
 export async function decorateArticlePayload(article, { day, yearsForward, storyId } = {}) {
-  const flags = getFutureImagesFlags();
-  if (!flags.imagesEnabled) return article;
   if (!article || typeof article !== 'object') return article;
-  if (Number(yearsForward) !== 5) return article;
+  const baseArticle = { ...article, image: sanitizeArticleImage(article.image) };
+
+  const flags = getFutureImagesFlags();
+  if (!flags.imagesEnabled) return baseArticle;
+  if (Number(yearsForward) !== 5) return baseArticle;
 
   const schema = await ensureFutureImagesSchema();
-  if (!schema.ok) return article;
+  if (!schema.ok) return baseArticle;
 
   const asset = await lookupSingleStoryAsset(day, yearsForward, storyId);
-  if (!asset || !asset.url) return article;
+  if (!asset || !asset.url) return baseArticle;
 
-  return { ...article, image: asset.url };
+  return { ...baseArticle, image: asset.url };
 }
-
