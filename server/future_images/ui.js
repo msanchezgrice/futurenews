@@ -161,11 +161,12 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
       if (cfg.postgresInitError) cfgPg.textContent += ' (err)';
       const providers = cfg.providers || {};
       const nano = providers.nanoBanana || {};
+      const gemini = providers.gemini || {};
       const openai = providers.openai || {};
       const providerName = providers.defaultProvider || '—';
       const providerOk = !!providers.imageProviderConfigured;
       cfgProvider.textContent = 'provider: ' + providerName + (providerOk ? '' : ' (missing keys)') +
-        ' nano=' + !!nano.configured + ' openai=' + !!openai.configured;
+        ' nano=' + !!nano.configured + ' gemini=' + !!gemini.configured + ' openai=' + !!openai.configured;
 
       const q = state && state.queue ? state.queue : {};
       queueBadge.textContent = 'queue: queued=' + (q.queued||0) + ' running=' + (q.running||0) + ' failed=' + (q.failed||0) + ' ok=' + (q.succeeded||0);

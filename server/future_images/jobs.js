@@ -2,12 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { formatDay, normalizeDay, SECTION_ORDER } from '../pipeline/utils.js';
 
-import { getFutureImagesFlags, getNanoBananaConfig, hasBlobConfig } from './config.js';
+import { getFutureImagesFlags, getGeminiConfig, getNanoBananaConfig, hasBlobConfig } from './config.js';
 import { stableStringify } from './json.js';
 import { ensureFutureImagesSchema, pgQuery } from './postgres.js';
 import { putImageBlob } from './blob.js';
 import { extractImagePromptFromArticle, parseSize } from './prompts.js';
-import { generateWithDalle, generateWithNanoBanana } from './providers.js';
+import { generateWithDalle, generateWithGemini, generateWithNanoBanana } from './providers.js';
 
 function isoNow() {
   return new Date().toISOString();
@@ -28,9 +28,11 @@ function sha256Hex(text) {
 function resolveDefaultProvider() {
   const nano = getNanoBananaConfig();
   if (nano.apiUrl && nano.apiKey) return { provider: 'nano_banana', model: nano.model || 'nano-banana-3-pro' };
+  const gemini = getGeminiConfig();
+  if (gemini.apiKey) return { provider: 'gemini', model: gemini.model || 'gemini-2.5-flash-image' };
   const openai = String(process.env.OPENAI_API_KEY || '').trim();
   if (openai) return { provider: 'dalle', model: 'dall-e-3' };
-  return { provider: 'nano_banana', model: nano.model || 'nano-banana-3-pro' };
+  return { provider: 'gemini', model: gemini.model || 'gemini-2.5-flash-image' };
 }
 
 export async function enqueueJob(params) {
@@ -322,10 +324,23 @@ async function generateImageForJob(job) {
   } catch {
     promptJson = {};
   }
-  if (job.provider === 'dalle') {
-    return generateWithDalle(promptJson);
-  }
-  return generateWithNanoBanana(promptJson);
+
+  const providerRequested = String(job?.provider || '').trim().toLowerCase();
+  const nano = getNanoBananaConfig();
+  const hasNano = Boolean(nano.apiUrl && nano.apiKey);
+  const gemini = getGeminiConfig();
+  const hasGemini = Boolean(gemini.apiKey);
+  const hasOpenAi = Boolean(String(process.env.OPENAI_API_KEY || '').trim());
+
+  // Explicit provider if configured, otherwise fail over in a fixed order.
+  if (providerRequested === 'nano_banana' && hasNano) return generateWithNanoBanana(promptJson);
+  if (providerRequested === 'gemini' && hasGemini) return generateWithGemini(promptJson);
+  if (providerRequested === 'dalle' && hasOpenAi) return generateWithDalle(promptJson);
+
+  if (hasNano) return generateWithNanoBanana(promptJson);
+  if (hasGemini) return generateWithGemini(promptJson);
+  if (hasOpenAi) return generateWithDalle(promptJson);
+  throw new Error('No configured image provider (need Nano Banana, Gemini, or OpenAI)');
 }
 
 export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } = {}) {
@@ -342,12 +357,13 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
   }
 
   const nano = getNanoBananaConfig();
+  const gemini = getGeminiConfig();
   const openai = String(process.env.OPENAI_API_KEY || '').trim();
-  if (!(nano.apiUrl && nano.apiKey) && !openai) {
+  if (!(nano.apiUrl && nano.apiKey) && !gemini.apiKey && !openai) {
     return {
       ok: false,
       error: 'image_provider_not_configured',
-      detail: 'Set NANOBANANA_API_URL + NANOBANANA_API_KEY (recommended) or OPENAI_API_KEY (DALL·E fallback).'
+      detail: 'Set NANOBANANA_API_URL + NANOBANANA_API_KEY, or GEMINI_API_KEY, or OPENAI_API_KEY.'
     };
   }
 

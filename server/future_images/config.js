@@ -64,3 +64,12 @@ export function getNanoBananaConfig() {
     model: String(process.env.NANOBANANA_MODEL || 'nano-banana-3-pro').trim() || 'nano-banana-3-pro'
   };
 }
+
+export function getGeminiConfig() {
+  return {
+    apiKey: String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim(),
+    apiBaseUrl: String(process.env.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta').trim(),
+    model: String(process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image').trim() || 'gemini-2.5-flash-image',
+    fallbackModel: 'gemini-2.5-flash-image'
+  };
+}

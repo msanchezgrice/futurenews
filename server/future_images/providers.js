@@ -1,4 +1,4 @@
-import { getNanoBananaConfig } from './config.js';
+import { getGeminiConfig, getNanoBananaConfig } from './config.js';
 
 function parseSize(size) {
   const raw = String(size || '').trim().toLowerCase();
@@ -7,6 +7,90 @@ function parseSize(size) {
   const width = Math.max(256, Math.min(4096, Number(m[1])));
   const height = Math.max(256, Math.min(4096, Number(m[2])));
   return { width, height };
+}
+
+function uniqueStrings(list) {
+  const out = [];
+  const seen = new Set();
+  for (const item of list || []) {
+    const s = String(item || '').trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+function clampText(value, max = 1200) {
+  const str = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!str) return '';
+  if (str.length <= max) return str;
+  return str.slice(0, max).replace(/[,\s;:.]+$/g, '').trim();
+}
+
+function nearestAspectRatio(width, height) {
+  const target = Math.max(0.01, Number(width) / Math.max(1, Number(height)));
+  const options = [
+    { name: '1:1', value: 1.0 },
+    { name: '2:3', value: 2 / 3 },
+    { name: '3:2', value: 3 / 2 },
+    { name: '3:4', value: 3 / 4 },
+    { name: '4:3', value: 4 / 3 },
+    { name: '4:5', value: 4 / 5 },
+    { name: '5:4', value: 5 / 4 },
+    { name: '9:16', value: 9 / 16 },
+    { name: '16:9', value: 16 / 9 },
+    { name: '21:9', value: 21 / 9 }
+  ];
+  let best = options[0];
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const opt of options) {
+    const delta = Math.abs(Math.log(target) - Math.log(opt.value));
+    if (delta < bestDelta) {
+      best = opt;
+      bestDelta = delta;
+    }
+  }
+  return best.name;
+}
+
+function buildGeminiVisualPrompt(promptJson, aspectRatio) {
+  const visualPrompt = clampText(promptJson?.visualPrompt || '', 1500);
+  if (!visualPrompt) throw new Error('Missing visualPrompt');
+  const negativePrompt = clampText(promptJson?.negativePrompt || '', 1200);
+  const style = clampText(promptJson?.style || 'editorial_photo', 80);
+  const composition = clampText(promptJson?.composition || '', 220);
+  const objects = Array.isArray(promptJson?.objects)
+    ? promptJson.objects.map((x) => clampText(x, 80)).filter(Boolean).slice(0, 12)
+    : [];
+
+  const parts = [
+    `Generate a high-fidelity editorial photo image.`,
+    `Primary scene: ${visualPrompt}`,
+    `Style: ${style}. Photojournalistic realism, natural lighting, high detail.`,
+    `Target aspect ratio: ${aspectRatio}.`
+  ];
+  if (composition) parts.push(`Composition guidance: ${composition}`);
+  if (objects.length) parts.push(`Required objects: ${objects.join(', ')}`);
+  if (negativePrompt) parts.push(`Avoid: ${negativePrompt}`);
+  return parts.join('\n');
+}
+
+function extractGeminiImageBuffer(payload) {
+  const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+  for (const candidate of candidates) {
+    const parts = Array.isArray(candidate?.content?.parts) ? candidate.content.parts : [];
+    for (const part of parts) {
+      const inline = part?.inlineData || part?.inline_data || null;
+      const b64 = String(inline?.data || '').trim();
+      if (!b64) continue;
+      const bytes = decodeBase64ToBuffer(b64);
+      if (!bytes || bytes.length < 1000) continue;
+      const mimeType = String(inline?.mimeType || inline?.mime_type || '').trim() || 'image/png';
+      return { bytes, mimeType };
+    }
+  }
+  return null;
 }
 
 function decodeBase64ToBuffer(b64) {
@@ -115,6 +199,71 @@ export async function generateWithNanoBanana(promptJson) {
   }
 }
 
+export async function generateWithGemini(promptJson) {
+  const cfg = getGeminiConfig();
+  if (!cfg.apiKey) {
+    const err = new Error('GEMINI_API_KEY not configured');
+    err.code = 'gemini_not_configured';
+    throw err;
+  }
+
+  const sizeStr = String(promptJson?.size || '1792x1024');
+  const { width, height } = parseSize(sizeStr);
+  const aspectRatio = nearestAspectRatio(width, height);
+  const textPrompt = buildGeminiVisualPrompt(promptJson, aspectRatio);
+  const models = uniqueStrings([cfg.model, cfg.fallbackModel, 'gemini-2.5-flash-image']);
+  const apiBase = String(cfg.apiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/g, '');
+
+  let lastError = null;
+  for (const model of models) {
+    const endpoint = `${apiBase}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000);
+    try {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: textPrompt }] }],
+          generationConfig: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: { aspectRatio }
+          }
+        }),
+        signal: controller.signal
+      });
+
+      const text = await resp.text().catch(() => '');
+      let parsed = null;
+      try { parsed = text ? JSON.parse(text) : null; } catch { parsed = null; }
+
+      if (!resp.ok) {
+        const detail = parsed?.error?.message ? String(parsed.error.message) : String(text || '').slice(0, 300);
+        throw new Error(`Gemini API ${resp.status} (${model}): ${detail}`);
+      }
+
+      const extracted = extractGeminiImageBuffer(parsed);
+      if (extracted) {
+        return {
+          bytes: extracted.bytes,
+          mimeType: extracted.mimeType || 'image/png',
+          width,
+          height,
+          modelUsed: model
+        };
+      }
+      throw new Error(`Gemini API returned no image payload (${model})`);
+    } catch (err) {
+      lastError = err;
+      // Try fallback models when current model is unavailable/unsupported.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  throw lastError || new Error('Gemini image generation failed');
+}
+
 export async function generateWithDalle(promptJson) {
   const apiKey = String(process.env.OPENAI_API_KEY || '').trim();
   if (!apiKey) {
@@ -158,4 +307,3 @@ export async function generateWithDalle(promptJson) {
     clearTimeout(timeout);
   }
 }
-
