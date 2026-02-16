@@ -11,7 +11,7 @@ const IDEAS_TOOL = {
   description: 'Return the ranked future-object idea list for The Future Times as a JSON object.',
   inputSchema: {
     type: 'object',
-    additionalProperties: true,
+    additionalProperties: false,
     properties: {
       schema: { type: 'integer' },
       day: { type: 'string' },
@@ -23,7 +23,7 @@ const IDEAS_TOOL = {
         type: 'array',
         items: {
           type: 'object',
-          additionalProperties: true,
+          additionalProperties: false,
           properties: {
             rank: { type: 'integer' },
             score: { type: 'number' },
@@ -32,9 +32,16 @@ const IDEAS_TOOL = {
             objectType: { type: 'string' },
             description: { type: 'string' },
             scene: { type: 'string' },
-            prompt: { type: 'object', additionalProperties: true },
-            sources: { type: 'object', additionalProperties: true }
-          }
+            sources: {
+              type: 'object',
+              additionalProperties: true,
+              properties: {
+                storyIds: { type: 'array', items: { type: 'string' } },
+                signals: { type: 'array', items: { type: 'string' } }
+              }
+            }
+          },
+          required: ['rank', 'score', 'confidence', 'title', 'objectType', 'description', 'scene']
         }
       }
     },
@@ -167,6 +174,7 @@ function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations
     ``,
     `Goal: produce a stack-ranked list of ${count} HIGH-CONFIDENCE physical/digital objects that plausibly exist by the edition date.`,
     `These objects should be directly suggested by today's baseline signals and the +${yearsForward}y newspaper edition themes.`,
+    `Do NOT include any image prompt fields. We derive image prompts later.`,
     ``,
     `Edition context:`,
     `- Baseline day: ${day}`,
@@ -184,13 +192,11 @@ function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations
     `- title: <= 80 chars`,
     `- description: <= 240 chars`,
     `- scene: <= 220 chars`,
-    `- prompt.visualPrompt: <= 520 chars`,
-    `- prompt.negativePrompt: <= 240 chars`,
     `- sources.storyIds: max 3 ids`,
     `- sources.signals: max 6 strings`,
     ``,
     `Output JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"targetYear":${targetYear},"generatedAt":"ISO","model":"claude-opus-4-6","ideas":[{"rank":1,"score":92.3,"confidence":85,"title":"...","objectType":"device|building|vehicle|ui|infrastructure|consumer_product|...","description":"...","scene":"...","prompt":{"visualPrompt":"...","negativePrompt":"...","size":"1792x1024","style":"editorial_photo"},"sources":{"storyIds":["..."],"signals":["..."]}}]}`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"targetYear":${targetYear},"generatedAt":"ISO","model":"claude-opus-4-6","ideas":[{"rank":1,"score":92.3,"confidence":85,"title":"...","objectType":"device|building|vehicle|ui|infrastructure|consumer_product|...","description":"...","scene":"...","sources":{"storyIds":["..."],"signals":["..."]}}]}`,
     ``,
     `Baseline topic clusters (today):`,
     topicLines || '(none)',
