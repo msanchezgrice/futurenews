@@ -7,7 +7,15 @@ function isModelNotFoundError(status, bodyText) {
   return msg.includes('not_found') || msg.includes('model') || msg.includes('Model') || msg.includes('model:');
 }
 
-export async function callAnthropicJson({ modelCandidates, system, user, maxTokens = 4096, temperature = 0.4, timeoutMs = 70000 }) {
+export async function callAnthropicJson({
+  modelCandidates,
+  system,
+  user,
+  maxTokens = 4096,
+  temperature = 0.4,
+  timeoutMs = 70000,
+  tool = null
+}) {
   const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     const err = new Error('ANTHROPIC_API_KEY not set');
@@ -36,6 +44,28 @@ export async function callAnthropicJson({ modelCandidates, system, user, maxToke
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      const body = {
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        system: String(system || '').trim() || undefined,
+        messages: [{ role: 'user', content: String(user || '') }]
+      };
+
+      const toolCfg = tool && typeof tool === 'object' ? tool : null;
+      const toolName = toolCfg ? String(toolCfg.name || '').trim() : '';
+      if (toolName) {
+        body.tools = [
+          {
+            name: toolName,
+            description: String(toolCfg.description || '').trim() || undefined,
+            input_schema: toolCfg.inputSchema || toolCfg.input_schema || toolCfg.schema || { type: 'object' }
+          }
+        ];
+        // Force a single tool call so we can read `tool_use.input` instead of parsing text JSON.
+        body.tool_choice = { type: 'tool', name: toolName };
+      }
+
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -43,13 +73,7 @@ export async function callAnthropicJson({ modelCandidates, system, user, maxToke
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01'
         },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          temperature,
-          system: String(system || '').trim() || undefined,
-          messages: [{ role: 'user', content: String(user || '') }]
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal
       });
 
@@ -72,14 +96,18 @@ export async function callAnthropicJson({ modelCandidates, system, user, maxToke
       }
 
       let text = '';
+      let toolInput = null;
       if (parsedResp && Array.isArray(parsedResp.content)) {
         for (const block of parsedResp.content) {
           if (block && block.type === 'text' && block.text) text += String(block.text);
+          if (toolName && block && block.type === 'tool_use' && block.name === toolName && block.input) {
+            toolInput = block.input;
+          }
         }
       }
       if (!text) text = bodyText || '';
 
-      const parsed = safeParseJson(text, null);
+      const parsed = toolInput || safeParseJson(text, null);
       if (!parsed) {
         const err = new Error(`Anthropic JSON parse failed. Preview: ${(text || '').slice(0, 300)}`);
         err.code = 'anthropic_parse_failed';
@@ -90,7 +118,7 @@ export async function callAnthropicJson({ modelCandidates, system, user, maxToke
         parsed.model = model;
       }
 
-      return { ok: true, model, parsed, text };
+      return { ok: true, model, parsed, text, toolUsed: Boolean(toolInput) };
     } catch (err) {
       lastErr = err;
       // If it was an abort, try next model? Better to fail fast.

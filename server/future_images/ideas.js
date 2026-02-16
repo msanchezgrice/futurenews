@@ -6,6 +6,42 @@ import { stableStringify } from './json.js';
 import { ensureFutureImagesSchema, pgQuery } from './postgres.js';
 import { enqueueJob } from './jobs.js';
 
+const IDEAS_TOOL = {
+  name: 'deliver_future_ideas',
+  description: 'Return the ranked future-object idea list for The Future Times as a JSON object.',
+  inputSchema: {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      schema: { type: 'integer' },
+      day: { type: 'string' },
+      yearsForward: { type: 'integer' },
+      targetYear: { type: 'integer' },
+      generatedAt: { type: 'string' },
+      model: { type: 'string' },
+      ideas: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            rank: { type: 'integer' },
+            score: { type: 'number' },
+            confidence: { type: 'integer' },
+            title: { type: 'string' },
+            objectType: { type: 'string' },
+            description: { type: 'string' },
+            scene: { type: 'string' },
+            prompt: { type: 'object', additionalProperties: true },
+            sources: { type: 'object', additionalProperties: true }
+          }
+        }
+      }
+    },
+    required: ['schema', 'day', 'yearsForward', 'targetYear', 'generatedAt', 'ideas']
+  }
+};
+
 function clampText(value, max = 600) {
   const str = String(value || '').replace(/\s+/g, ' ').trim();
   if (!str) return '';
@@ -192,7 +228,7 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
   const storyCurations = pipeline.listStoryCurations(builtDay, { yearsForward });
 
   const system =
-    'You are Opus 4.6. Return STRICT JSON only. If you are unsure, choose the most plausible editorial object. No markdown fences.';
+    'You are a careful editor. Respond by calling the deliver_future_ideas tool with a single JSON object. Do not include any text.';
   const attempts = buildAttemptCounts(count);
   let parsed = null;
   let model = '';
@@ -229,7 +265,8 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
           user: prompt,
           maxTokens,
           temperature: 0.4,
-          timeoutMs
+          timeoutMs,
+          tool: IDEAS_TOOL
         });
       } catch (err) {
         // Opus can be slow; fall back to faster models if we have time budget remaining.
@@ -244,7 +281,8 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
             user: prompt,
             maxTokens,
             temperature: 0.4,
-            timeoutMs: timeout2
+            timeoutMs: timeout2,
+            tool: IDEAS_TOOL
           });
         } else {
           throw err;
