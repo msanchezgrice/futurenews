@@ -12,6 +12,7 @@ import { clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
 import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
 import { decorateArticlePayload, decorateEditionPayload } from './future_images/decorators.js';
+import { getFutureImagesFlags } from './future_images/config.js';
 import { refreshIdeas } from './future_images/ideas.js';
 import { enqueueSectionHeroJobs, enqueueSingleIdeaJob, enqueueSingleStoryHeroJob, runImageWorker } from './future_images/jobs.js';
 import { getImagesAdminState } from './future_images/state.js';
@@ -1870,7 +1871,10 @@ async function requestHandler(req, res) {
 	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
 	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
 	      const count = Number(url.searchParams.get('count') || 30);
-	      const ideas = await refreshIdeas({ day: builtDay, pipeline, yearsForward, count, force: false });
+	      const flags = getFutureImagesFlags();
+	      const ideas = flags.ideasEnabled
+	        ? await refreshIdeas({ day: builtDay, pipeline, yearsForward, count, force: false })
+	        : { ok: true, skipped: true, reason: 'ideas_disabled' };
 	      const heroes = await enqueueSectionHeroJobs({ day: builtDay, pipeline, yearsForward, force: false, includeGlobalHero: true });
 	      sendJson(res, { ok: true, day: builtDay, yearsForward, ideas, heroes });
 	      return;

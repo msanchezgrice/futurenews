@@ -35,6 +35,13 @@ function resolveDefaultProvider() {
   return { provider: 'gemini', model: gemini.model || 'gemini-2.5-flash-image' };
 }
 
+function getWorkerAllowedKinds(flags) {
+  const kinds = [];
+  if (flags.storyHeroEnabled) kinds.push('story_section_hero');
+  if (flags.ideasEnabled) kinds.push('idea_image');
+  return kinds;
+}
+
 export async function enqueueJob(params) {
   const schema = await ensureFutureImagesSchema();
   if (!schema.ok) return schema;
@@ -49,6 +56,14 @@ export async function enqueueJob(params) {
   if (!kind) throw new Error('kind required');
   if (!day) throw new Error('day required');
   if (!Number.isFinite(yearsForward)) throw new Error('yearsForward invalid');
+
+  const flags = getFutureImagesFlags();
+  if (kind === 'story_section_hero' && !flags.storyHeroEnabled) {
+    return { ok: false, error: 'disabled', detail: 'Set FT_IMAGES_STORY_HERO_ENABLED=true to enqueue story hero jobs.' };
+  }
+  if (kind === 'idea_image' && !flags.ideasEnabled) {
+    return { ok: false, error: 'disabled', detail: 'Set FT_IDEAS_ENABLED=true to enqueue idea image jobs.' };
+  }
 
   const promptObj = params?.promptJson && typeof params.promptJson === 'object' ? params.promptJson : {};
   const normalizedPromptJson = stableStringify(promptObj);
@@ -223,13 +238,18 @@ export async function enqueueSectionHeroJobs({ day, pipeline, yearsForward = 5, 
   };
 }
 
-async function claimNextJob({ day = null } = {}) {
+async function claimNextJob({ day = null, kinds = null } = {}) {
   const now = isoNow();
   const params = [];
   let filter = `status='queued'`;
   if (day) {
     params.push(day);
     filter += ` AND day=$${params.length}`;
+  }
+  const allowedKinds = Array.isArray(kinds) ? kinds.map((k) => String(k || '').trim()).filter(Boolean) : [];
+  if (allowedKinds.length > 0) {
+    params.push(allowedKinds);
+    filter += ` AND kind = ANY($${params.length}::text[])`;
   }
   params.push(now);
   const nowIdx = params.length;
@@ -367,6 +387,29 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
     };
   }
 
+  const allowedKinds = getWorkerAllowedKinds(flags);
+  if (!allowedKinds.length) {
+    return { ok: false, error: 'disabled', detail: 'No image job kinds are enabled.' };
+  }
+
+  // If idea images are disabled, fail stale queued idea jobs so queue state reflects
+  // current policy and workers only process section-hero jobs.
+  if (!flags.ideasEnabled) {
+    const finishedAt = isoNow();
+    await pgQuery(
+      `
+        UPDATE ft_image_jobs
+        SET status='failed',
+            finished_at=$1,
+            last_error=COALESCE(last_error, 'ideas_disabled')
+        WHERE status='queued'
+          AND kind='idea_image'
+          AND ($2::text IS NULL OR day=$2);
+      `,
+      [finishedAt, day || null]
+    );
+  }
+
   const startedAtMs = Date.now();
   let processed = 0;
   let succeeded = 0;
@@ -374,7 +417,7 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
   const jobs = [];
 
   while (processed < limit && Date.now() - startedAtMs < maxMs) {
-    const job = await claimNextJob({ day });
+    const job = await claimNextJob({ day, kinds: allowedKinds });
     if (!job) break;
     processed++;
 
@@ -470,6 +513,9 @@ export async function enqueueSingleIdeaJob({ ideaId, force = false } = {}) {
   const flags = getFutureImagesFlags();
   if (!flags.imagesEnabled) {
     return { ok: false, error: 'disabled', detail: 'Set FT_IMAGES_ENABLED=true' };
+  }
+  if (!flags.ideasEnabled) {
+    return { ok: false, error: 'disabled', detail: 'Set FT_IDEAS_ENABLED=true to enqueue idea images.' };
   }
   const schema = await ensureFutureImagesSchema();
   if (!schema.ok) return schema;
