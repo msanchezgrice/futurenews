@@ -62,6 +62,24 @@ function checkAdminAuth(req, url) {
   return false;
 }
 
+// ── Cron auth ──
+// Vercel Cron optionally signs scheduled requests with:
+//   Authorization: Bearer <CRON_SECRET>
+// When unset, cron routes are open (local dev).
+const CRON_SECRET = String(process.env.CRON_SECRET || '').trim();
+
+function checkCronAuth(req, url) {
+  if (!CRON_SECRET && !ADMIN_SECRET) return true;
+  const auth = String(req.headers.authorization || '').trim();
+  const matchAuth = auth.match(/^Bearer\\s+(.+)$/i);
+  const token = matchAuth ? String(matchAuth[1] || '').trim() : '';
+  if (token && ADMIN_SECRET && token === ADMIN_SECRET) return true;
+  if (token && CRON_SECRET && token === CRON_SECRET) return true;
+  const qs = String(url.searchParams.get('cronSecret') || '').trim();
+  if (qs && CRON_SECRET && qs === CRON_SECRET) return true;
+  return false;
+}
+
 function sendAdminLogin(res) {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -1805,6 +1823,14 @@ async function requestHandler(req, res) {
 
     const { url, pathname, years, day } = parseRequest(req.url);
 
+    // ── Cron auth gate ──
+    if (pathname.startsWith('/api/cron')) {
+      if (!checkCronAuth(req, url)) {
+        sendJson(res, { ok: false, error: 'unauthorized' }, 401);
+        return;
+      }
+    }
+
     // ── Admin auth gate ──
     const isProtectedRoute = pathname.startsWith('/api/admin') || pathname === '/api/day-signal';
     if (isProtectedRoute && ADMIN_SECRET) {
@@ -1825,12 +1851,46 @@ async function requestHandler(req, res) {
         res.end();
         return;
       }
-    }
+	    }
 
-    if (pathname === '/api/ping') {
-      sendJson(res, { ok: true });
-      return;
-    }
+	    // ── Cron endpoints (GET) ──
+	    if (pathname === '/api/cron/pipeline') {
+	      if (req.method !== 'GET') return send405(res, 'GET');
+	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+	      await pipeline.refresh({ day: builtDay, force: false });
+	      const curated = await pipeline.curateDay(builtDay, { force: false });
+	      sendJson(res, { ok: true, day: builtDay, curated });
+	      return;
+	    }
+
+	    if (pathname === '/api/cron/images/refresh') {
+	      if (req.method !== 'GET') return send405(res, 'GET');
+	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+	      const count = Number(url.searchParams.get('count') || 30);
+	      const ideas = await refreshIdeas({ day: builtDay, pipeline, yearsForward, count, force: false });
+	      const heroes = await enqueueSectionHeroJobs({ day: builtDay, pipeline, yearsForward, force: false, includeGlobalHero: true });
+	      sendJson(res, { ok: true, day: builtDay, yearsForward, ideas, heroes });
+	      return;
+	    }
+
+	    if (pathname === '/api/cron/images/worker') {
+	      if (req.method !== 'GET') return send405(res, 'GET');
+	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+	      const limit = Number(url.searchParams.get('limit') || 3);
+	      const maxMs = Number(url.searchParams.get('maxMs') || 220000);
+	      const result = await runImageWorker({ day: builtDay, limit, maxMs });
+	      sendJson(res, { day: builtDay, ...result });
+	      return;
+	    }
+
+	    if (pathname === '/api/ping') {
+	      sendJson(res, { ok: true });
+	      return;
+	    }
 
 
     if (pathname === '/api/config') {

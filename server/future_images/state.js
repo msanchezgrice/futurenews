@@ -1,6 +1,6 @@
 import { formatDay, normalizeDay, SECTION_ORDER } from '../pipeline/utils.js';
 
-import { getFutureImagesFlags, hasBlobConfig, hasPostgresConfig } from './config.js';
+import { getFutureImagesFlags, getNanoBananaConfig, hasBlobConfig, hasPostgresConfig } from './config.js';
 import { ensureFutureImagesSchema, getPoolInitError, pgQuery } from './postgres.js';
 
 function clampText(value, max = 260) {
@@ -117,6 +117,10 @@ export async function getImagesAdminState({ day, pipeline, yearsForward = 5 } = 
   const builtDay = await pipeline.ensureDayBuilt(normalized);
   const edition = pipeline.getEdition(builtDay, yearsForward);
   const articles = Array.isArray(edition?.articles) ? edition.articles : [];
+  const nano = getNanoBananaConfig();
+  const nanoConfigured = Boolean(nano.apiUrl && nano.apiKey);
+  const openaiConfigured = Boolean(String(process.env.OPENAI_API_KEY || '').trim());
+  const defaultProvider = nanoConfigured ? 'nano_banana' : openaiConfigured ? 'dalle' : 'missing';
 
   const sectionHeroes = SECTION_ORDER.map((section) => {
     const a = articles.find((x) => String(x?.section || '').trim() === section) || null;
@@ -137,7 +141,13 @@ export async function getImagesAdminState({ day, pipeline, yearsForward = 5 } = 
       flags,
       postgresConfigured: hasPostgresConfig(),
       blobConfigured: hasBlobConfig(),
-      postgresInitError: getPoolInitError() || null
+      postgresInitError: getPoolInitError() || null,
+      providers: {
+        defaultProvider,
+        imageProviderConfigured: nanoConfigured || openaiConfigured,
+        nanoBanana: { configured: nanoConfigured, model: nano.model || null },
+        openai: { configured: openaiConfigured }
+      }
     },
     edition: edition
       ? {
@@ -213,4 +223,3 @@ export async function getImagesAdminState({ day, pipeline, yearsForward = 5 } = 
   out.failures = failures;
   return out;
 }
-

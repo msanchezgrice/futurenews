@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { formatDay, normalizeDay, SECTION_ORDER } from '../pipeline/utils.js';
 
-import { getFutureImagesFlags, getNanoBananaConfig } from './config.js';
+import { getFutureImagesFlags, getNanoBananaConfig, hasBlobConfig } from './config.js';
 import { stableStringify } from './json.js';
 import { ensureFutureImagesSchema, pgQuery } from './postgres.js';
 import { putImageBlob } from './blob.js';
@@ -336,6 +336,20 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
 
   const schema = await ensureFutureImagesSchema();
   if (!schema.ok) return schema;
+
+  if (!hasBlobConfig()) {
+    return { ok: false, error: 'blob_not_configured', detail: 'Set BLOB_READ_WRITE_TOKEN to enable image uploads.' };
+  }
+
+  const nano = getNanoBananaConfig();
+  const openai = String(process.env.OPENAI_API_KEY || '').trim();
+  if (!(nano.apiUrl && nano.apiKey) && !openai) {
+    return {
+      ok: false,
+      error: 'image_provider_not_configured',
+      detail: 'Set NANOBANANA_API_URL + NANOBANANA_API_KEY (recommended) or OPENAI_API_KEY (DALL·E fallback).'
+    };
+  }
 
   const startedAtMs = Date.now();
   let processed = 0;

@@ -770,18 +770,30 @@ export class FutureTimesPipeline {
     }
 
     const patchedArticles = articles.map((a) => {
-      const id = String(a?.id || '').trim();
+      const baseArticle = a && typeof a === 'object' ? { ...a } : a;
+      const id = String(baseArticle?.id || '').trim();
       const c = id ? map.get(id) : null;
-      if (!c || !c.plan) return a;
+      if (!c || !c.plan) {
+        // Preserve the full edition. Curations are applied opportunistically; uncurated
+        // stories remain present with default confidence and no curation metadata.
+        if (baseArticle && typeof baseArticle === 'object') {
+          const conf = Number(baseArticle.confidence);
+          baseArticle.confidence = Number.isFinite(conf) ? conf : 0;
+          if (!('curation' in baseArticle)) baseArticle.curation = null;
+        }
+        return baseArticle;
+      }
       const curatedTitle = String(c.plan.curatedTitle || c.plan.title || '').trim();
       const curatedDek = String(c.plan.curatedDek || c.plan.dek || '').trim();
       const draftBody = c.plan.draftArticle?.body || '';
+      const conf = Number(c.plan.confidence);
+      const confClamped = Number.isFinite(conf) ? Math.max(0, Math.min(100, Math.round(conf))) : 0;
       return {
-        ...a,
-        title: curatedTitle || a.title,
-        dek: curatedDek || a.dek,
-        body: (draftBody && draftBody.length > 100) ? draftBody : (a.body || ''),
-        confidence: Number(c.plan.confidence) || 0,
+        ...baseArticle,
+        title: curatedTitle || baseArticle.title,
+        dek: curatedDek || baseArticle.dek,
+        body: (draftBody && draftBody.length > 100) ? draftBody : (baseArticle.body || ''),
+        confidence: confClamped,
         curation: {
           key: Boolean(c.key) || Boolean(c.plan.key),
           hero: Boolean(c.plan.hero),
@@ -792,20 +804,16 @@ export class FutureTimesPipeline {
           topicTitle: c.plan.topicTitle || c.plan.topicSeed || '',
           sparkDirections: c.plan.sparkDirections || '',
           futureEventSeed: c.plan.futureEventSeed || '',
-          confidence: Number(c.plan.confidence) || 0,
+          confidence: confClamped,
           outline: Array.isArray(c.plan.outline) ? c.plan.outline.slice(0, 10) : [],
           draftArticle: c.plan.draftArticle || null
         }
       };
     });
 
-    // Only include articles the LLM actually curated (confidence > 0 means the LLM touched it)
-    const curatedArticles = patchedArticles.filter((a) => {
-      const conf = Number(a.confidence);
-      return conf > 0;
-    });
-    // Fall back to all articles if none were curated (first run, no curation yet)
-    const finalArticles = curatedArticles.length > 0 ? curatedArticles : patchedArticles;
+    // Preserve the full edition. (Curation may cover only a subset; we still want one
+    // rank-1 story per section for the newspaper and hero images.)
+    const finalArticles = patchedArticles;
 
     const resolvedHeroId = heroOverride || base.heroId || base.heroStoryId || (finalArticles[0] ? finalArticles[0].id : null);
     const dayCuration = this.getDayCuration(base.day);
@@ -1978,7 +1986,7 @@ export class FutureTimesPipeline {
         FROM edition_stories s
         JOIN editions e ON e.edition_id = s.edition_id
         WHERE e.day=? AND e.years_forward=?
-        ORDER BY s.section ASC, s.rank ASC;
+        ORDER BY s.rank ASC, s.section ASC, s.story_id ASC;
       `
       )
       .all(normalized, yearsForward);

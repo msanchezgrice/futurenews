@@ -72,6 +72,7 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
       <span class="badge" id="cfgFlags">flags: —</span>
       <span class="badge" id="cfgPg">postgres: —</span>
       <span class="badge" id="cfgBlob">blob: —</span>
+      <span class="badge" id="cfgProvider">provider: —</span>
       <span class="badge" id="queueBadge">queue: —</span>
     </div>
   </header>
@@ -125,6 +126,7 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
     const cfgFlags = document.getElementById('cfgFlags');
     const cfgPg = document.getElementById('cfgPg');
     const cfgBlob = document.getElementById('cfgBlob');
+    const cfgProvider = document.getElementById('cfgProvider');
     const queueBadge = document.getElementById('queueBadge');
     const ideasMeta = document.getElementById('ideasMeta');
 
@@ -157,6 +159,13 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
       cfgPg.textContent = 'postgres: ' + (cfg.postgresConfigured ? 'configured' : 'missing');
       cfgBlob.textContent = 'blob: ' + (cfg.blobConfigured ? 'configured' : 'missing');
       if (cfg.postgresInitError) cfgPg.textContent += ' (err)';
+      const providers = cfg.providers || {};
+      const nano = providers.nanoBanana || {};
+      const openai = providers.openai || {};
+      const providerName = providers.defaultProvider || '—';
+      const providerOk = !!providers.imageProviderConfigured;
+      cfgProvider.textContent = 'provider: ' + providerName + (providerOk ? '' : ' (missing keys)') +
+        ' nano=' + !!nano.configured + ' openai=' + !!openai.configured;
 
       const q = state && state.queue ? state.queue : {};
       queueBadge.textContent = 'queue: queued=' + (q.queued||0) + ' running=' + (q.running||0) + ' failed=' + (q.failed||0) + ' ok=' + (q.succeeded||0);
