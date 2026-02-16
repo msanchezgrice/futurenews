@@ -69,7 +69,7 @@ export function getGeminiConfig() {
   return {
     apiKey: String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '').trim(),
     apiBaseUrl: String(process.env.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta').trim(),
-    model: String(process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image').trim() || 'gemini-2.5-flash-image',
+    model: String(process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image-preview').trim() || 'gemini-3-pro-image-preview',
     fallbackModel: 'gemini-2.5-flash-image'
   };
 }

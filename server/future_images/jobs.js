@@ -29,10 +29,11 @@ function resolveDefaultProvider() {
   const nano = getNanoBananaConfig();
   if (nano.apiUrl && nano.apiKey) return { provider: 'nano_banana', model: nano.model || 'nano-banana-3-pro' };
   const gemini = getGeminiConfig();
-  if (gemini.apiKey) return { provider: 'gemini', model: gemini.model || 'gemini-2.5-flash-image' };
+  // "Nano Banana" runs on Gemini image models as the default cloud path.
+  if (gemini.apiKey) return { provider: 'nano_banana', model: gemini.model || 'gemini-3-pro-image-preview' };
   const openai = String(process.env.OPENAI_API_KEY || '').trim();
   if (openai) return { provider: 'dalle', model: 'dall-e-3' };
-  return { provider: 'gemini', model: gemini.model || 'gemini-2.5-flash-image' };
+  return { provider: 'nano_banana', model: gemini.model || 'gemini-3-pro-image-preview' };
 }
 
 function getWorkerAllowedKinds(flags) {
@@ -353,7 +354,11 @@ async function generateImageForJob(job) {
   const hasOpenAi = Boolean(String(process.env.OPENAI_API_KEY || '').trim());
 
   // Explicit provider if configured, otherwise fail over in a fixed order.
-  if (providerRequested === 'nano_banana' && hasNano) return generateWithNanoBanana(promptJson);
+  // nano_banana can be either a direct Nano Banana endpoint or Gemini image models.
+  if (providerRequested === 'nano_banana') {
+    if (hasNano) return generateWithNanoBanana(promptJson);
+    if (hasGemini) return generateWithGemini(promptJson);
+  }
   if (providerRequested === 'gemini' && hasGemini) return generateWithGemini(promptJson);
   if (providerRequested === 'dalle' && hasOpenAi) return generateWithDalle(promptJson);
 
@@ -383,7 +388,7 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
     return {
       ok: false,
       error: 'image_provider_not_configured',
-      detail: 'Set NANOBANANA_API_URL + NANOBANANA_API_KEY, or GEMINI_API_KEY, or OPENAI_API_KEY.'
+      detail: 'Set GEMINI_API_KEY (Nano Banana via Gemini), or NANOBANANA_API_URL + NANOBANANA_API_KEY, or OPENAI_API_KEY.'
     };
   }
 
