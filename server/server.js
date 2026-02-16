@@ -386,8 +386,8 @@ function buildSeedArticleFromStory(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
   const editionDate = pack.editionDate || '';
-  const title = curation?.curatedTitle || curation?.draftArticle?.title || '';
-  const dek = curation?.curatedDek || curation?.draftArticle?.dek || '';
+  const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || story.title || '';
+  const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || story.dek || '';
   const meta = editionDate ? `${story.section} • ${editionDate}` : String(story.section || '').trim();
   const body = buildForecastBody(story);
   const confidence = Number(curation?.confidence) || 0;
@@ -2823,8 +2823,8 @@ async function requestHandler(req, res) {
       const baselineDay = normalizeDay(story.day) || formatDay();
       const baselineYear = baselineDay.slice(0, 4) || '2026';
       const targetYear = Number(baselineYear) + (Number.isFinite(Number(story.yearsForward)) ? Number(story.yearsForward) : 0);
-      const title = curation?.curatedTitle || curation?.draftArticle?.title || story.title || '';
-      const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dek || '';
+      const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || story.title || '';
+      const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || story.dek || '';
       const directions = curation?.sparkDirections || '';
       const eventSeed = curation?.futureEventSeed || '';
 
