@@ -2,6 +2,28 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
+function shouldAutoRecoverMalformedDb() {
+  return Boolean(process.env.VERCEL) || String(process.env.FT_DB_AUTO_RECOVER || '').toLowerCase() === 'true';
+}
+
+function checkDatabaseIntegrity(db) {
+  try {
+    const rows = db.prepare('PRAGMA quick_check;').all();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { ok: false, reason: 'quick_check_empty' };
+    }
+    for (const row of rows) {
+      const message = String(Object.values(row || {})[0] || '').trim().toLowerCase();
+      if (message !== 'ok') {
+        return { ok: false, reason: message || 'quick_check_failed' };
+      }
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err?.message || err) };
+  }
+}
+
 export function openDatabase(dbFilePath) {
   let effectivePath = dbFilePath;
 
@@ -23,7 +45,24 @@ export function openDatabase(dbFilePath) {
   }
 
   fs.mkdirSync(path.dirname(effectivePath), { recursive: true });
-  const db = new DatabaseSync(effectivePath);
+  let db = new DatabaseSync(effectivePath);
+  if (shouldAutoRecoverMalformedDb()) {
+    const integrity = checkDatabaseIntegrity(db);
+    if (!integrity.ok) {
+      console.warn(`DB integrity check failed for ${effectivePath}: ${integrity.reason}. Recreating file.`);
+      try {
+        db.close();
+      } catch {
+        // ignore
+      }
+      try {
+        fs.rmSync(effectivePath, { force: true });
+      } catch {
+        // ignore
+      }
+      db = new DatabaseSync(effectivePath);
+    }
+  }
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec('PRAGMA synchronous = NORMAL;');
   db.exec('PRAGMA foreign_keys = ON;');
