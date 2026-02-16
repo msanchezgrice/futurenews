@@ -10,6 +10,7 @@
   },
   "crons": [
     { "path": "/api/cron/pipeline", "schedule": "5 12 * * *" },
+    { "path": "/api/cron/email/daily", "schedule": "20 12 * * *" },
     { "path": "/api/cron/images/worker", "schedule": "30 12 * * *" },
     { "path": "/api/cron/images/worker", "schedule": "50 12 * * *" }
   ],

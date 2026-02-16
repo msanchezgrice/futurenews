@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { FutureTimesPipeline } from './pipeline/pipeline.js';
-import { clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
+import { SECTION_ORDER, clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
 import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
 import { decorateArticlePayload, decorateEditionPayload } from './future_images/decorators.js';
@@ -899,6 +899,241 @@ function parseStoryIdFromPath(pathname) {
     return decodeURIComponent(segment);
   } catch {
     return '';
+  }
+}
+
+function parseBooleanLike(value, fallback = false) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw !== '0' && raw !== 'false' && raw !== 'off' && raw !== 'no';
+}
+
+function normalizeOrigin(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return raw.replace(/\/+$/g, '');
+  }
+}
+
+function getRequestOrigin(req, url) {
+  const envOrigin = normalizeOrigin(
+    process.env.PUBLIC_BASE_URL || process.env.SITE_URL || process.env.FUTURE_TIMES_BASE_URL || ''
+  );
+  if (envOrigin) return envOrigin;
+  const xfProto = String(req?.headers?.['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  const xfHost = String(req?.headers?.['x-forwarded-host'] || req?.headers?.host || '').split(',')[0].trim();
+  if (xfHost) return `${xfProto || 'https'}://${xfHost}`;
+  const host = String(url?.host || '').trim();
+  if (host) {
+    const proto = String(url?.protocol || 'https:').replace(/:$/, '') || 'https';
+    return `${proto}://${host}`;
+  }
+  return 'https://futurenews-ten.vercel.app';
+}
+
+function parseEmailRecipients(raw) {
+  return Array.from(
+    new Set(
+      String(raw || '')
+        .split(/[,\s;]+/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function truncateForEmail(text, maxLen = 220) {
+  const raw = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+  if (raw.length <= maxLen) return raw;
+  return `${raw.slice(0, maxLen - 1).trimEnd()}...`;
+}
+
+function buildDailyEditionEmailContent({ day, yearsForward, edition, origin }) {
+  const editionDate = String(edition?.date || '').trim() || day;
+  const articles = Array.isArray(edition?.articles) ? edition.articles : [];
+  const heroId = String(edition?.heroStoryId || edition?.heroId || '').trim();
+  const hero = articles.find((a) => String(a?.id || '').trim() === heroId) || articles[0] || null;
+  const grouped = new Map();
+  for (const article of articles) {
+    const section = String(article?.section || 'Other').trim() || 'Other';
+    if (!grouped.has(section)) grouped.set(section, []);
+    grouped.get(section).push(article);
+  }
+  const orderedSections = [
+    ...SECTION_ORDER.filter((section) => grouped.has(section)),
+    ...Array.from(grouped.keys()).filter((section) => !SECTION_ORDER.includes(section))
+  ];
+
+  const frontPageUrl = `${origin}/index.html?day=${encodeURIComponent(day)}&years=${encodeURIComponent(String(yearsForward))}`;
+  const articleUrl = (id) =>
+    `${origin}/article.html?id=${encodeURIComponent(String(id || ''))}&day=${encodeURIComponent(day)}&years=${encodeURIComponent(String(yearsForward))}`;
+
+  const subject = `The Future Times • ${editionDate} • +${yearsForward}y`;
+  const heroBlock = hero
+    ? `
+      <section style="margin:20px 0 24px;border:1px solid #ddd;padding:16px;border-radius:8px;background:#fafafa">
+        <div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#666;margin-bottom:8px">Lead Story</div>
+        <h2 style="margin:0 0 8px;font-size:24px;line-height:1.2"><a href="${escapeHtml(articleUrl(hero.id))}" style="color:#111;text-decoration:none">${escapeHtml(hero.title || '(untitled)')}</a></h2>
+        ${hero.dek ? `<p style="margin:0;color:#333;line-height:1.4">${escapeHtml(hero.dek)}</p>` : ''}
+      </section>
+    `
+    : '';
+
+  const sectionBlocks = orderedSections
+    .map((section) => {
+      const list = grouped.get(section) || [];
+      if (!list.length) return '';
+      const items = list
+        .map((article) => {
+          const id = String(article?.id || '').trim();
+          const title = String(article?.title || '').trim() || '(untitled)';
+          const dek = truncateForEmail(article?.dek || '');
+          const body = truncateForEmail(article?.body || '');
+          const summary = dek || body;
+          return `
+            <li style="margin:10px 0 14px">
+              <a href="${escapeHtml(articleUrl(id))}" style="color:#111;text-decoration:none;font-weight:700">${escapeHtml(title)}</a>
+              ${summary ? `<div style="margin-top:4px;color:#444;line-height:1.35">${escapeHtml(summary)}</div>` : ''}
+            </li>
+          `;
+        })
+        .join('');
+      return `
+        <section style="margin:0 0 18px">
+          <h3 style="margin:0 0 8px;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:#333">${escapeHtml(section)}</h3>
+          <ol style="padding-left:20px;margin:0">${items}</ol>
+        </section>
+      `;
+    })
+    .join('');
+
+  const html = `
+    <div style="font-family:Georgia,'Times New Roman',serif;color:#111;max-width:760px;margin:0 auto;padding:16px">
+      <h1 style="margin:0 0 6px;font-size:38px;letter-spacing:.02em">THE FUTURE TIMES</h1>
+      <div style="margin:0 0 16px;color:#555">Edition • ${escapeHtml(editionDate)} • Baseline day ${escapeHtml(day)} • +${escapeHtml(String(yearsForward))}y</div>
+      <div style="margin:0 0 16px"><a href="${escapeHtml(frontPageUrl)}">Open Front Page</a></div>
+      ${heroBlock}
+      ${sectionBlocks || '<p>No stories were available for this edition.</p>'}
+    </div>
+  `.trim();
+
+  const textLines = [
+    'THE FUTURE TIMES',
+    `Edition: ${editionDate}`,
+    `Baseline day: ${day} (+${yearsForward}y)`,
+    `Front page: ${frontPageUrl}`,
+    ''
+  ];
+  if (hero) {
+    textLines.push(`LEAD: ${hero.title || '(untitled)'}`);
+    if (hero.dek) textLines.push(String(hero.dek));
+    textLines.push(`Link: ${articleUrl(hero.id)}`, '');
+  }
+  for (const section of orderedSections) {
+    const list = grouped.get(section) || [];
+    if (!list.length) continue;
+    textLines.push(section.toUpperCase());
+    for (const article of list) {
+      textLines.push(`- ${article.title || '(untitled)'}`);
+      const summary = truncateForEmail(article.dek || article.body || '', 220);
+      if (summary) textLines.push(`  ${summary}`);
+      textLines.push(`  ${articleUrl(article.id)}`);
+    }
+    textLines.push('');
+  }
+  const text = textLines.join('\n').trim();
+  return { subject, html, text, articleCount: articles.length, editionDate };
+}
+
+function getDailyEmailConfig() {
+  return {
+    enabled: parseBooleanLike(process.env.FT_DAILY_EMAIL_ENABLED, false),
+    apiKey: String(process.env.RESEND_API_KEY || '').trim(),
+    from: String(process.env.RESEND_FROM || '').trim(),
+    to: parseEmailRecipients(process.env.RESEND_TO || '')
+  };
+}
+
+async function sendResendEmail({ apiKey, from, to, subject, html, text, idempotencyKey }) {
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  };
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ from, to, subject, html, text })
+  });
+  const payload = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    throw new Error(`resend_http_${resp.status}: ${JSON.stringify(payload).slice(0, 300)}`);
+  }
+  return payload;
+}
+
+async function sendDailyEditionEmail({ req, url, day, yearsForward, force = false }) {
+  const config = getDailyEmailConfig();
+  if (!config.enabled && !force) {
+    return { ok: true, skipped: true, reason: 'daily_email_disabled' };
+  }
+  if (!config.apiKey || !config.from || !config.to.length) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'resend_not_configured',
+      detail: 'Set RESEND_API_KEY, RESEND_FROM, RESEND_TO, and FT_DAILY_EMAIL_ENABLED=true.'
+    };
+  }
+
+  const edition = pipeline.getEdition(day, yearsForward);
+  if (!edition) {
+    return { ok: false, skipped: true, reason: 'edition_not_found', day, yearsForward };
+  }
+
+  const origin = getRequestOrigin(req, url);
+  const content = buildDailyEditionEmailContent({ day, yearsForward, edition, origin });
+  const idempotencyKey = `ft-daily-${createHash('sha256')
+    .update(`${day}|${yearsForward}|${config.to.join(',').toLowerCase()}`)
+    .digest('hex')
+    .slice(0, 36)}`;
+
+  pipeline.traceEvent(day, 'email.daily.start', {
+    yearsForward,
+    articleCount: content.articleCount,
+    recipients: config.to.length
+  });
+
+  try {
+    const sent = await sendResendEmail({
+      apiKey: config.apiKey,
+      from: config.from,
+      to: config.to,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
+      idempotencyKey
+    });
+    const result = {
+      ok: true,
+      sent: true,
+      id: sent?.id || null,
+      subject: content.subject,
+      recipients: config.to.length,
+      articleCount: content.articleCount,
+      editionDate: content.editionDate
+    };
+    pipeline.traceEvent(day, 'email.daily.sent', result);
+    return result;
+  } catch (err) {
+    const error = String(err?.message || err);
+    pipeline.traceEvent(day, 'email.daily.error', { yearsForward, error });
+    return { ok: false, sent: false, error, subject: content.subject };
   }
 }
 
@@ -1979,19 +2214,41 @@ async function requestHandler(req, res) {
 	      return;
 	    }
 
+	    if (pathname === '/api/cron/email/daily') {
+	      if (req.method !== 'GET') return send405(res, 'GET');
+	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const gate = shouldRunCronForDay(requestedDay);
+	      if (!gate.run) {
+	        sendJson(res, { ok: true, skipped: true, reason: 'cron_not_started', day: gate.day, startDay: gate.startDay });
+	        return;
+	      }
+	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+	      const force = parseBooleanLike(url.searchParams.get('force'), false);
+	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+	      const email = await sendDailyEditionEmail({ req, url, day: builtDay, yearsForward, force });
+	      sendJson(res, {
+	        ok: Boolean(email?.ok) || Boolean(email?.skipped),
+	        day: builtDay,
+	        yearsForward,
+	        email
+	      });
+	      return;
+	    }
+
 	    if (pathname === '/api/ping') {
 	      sendJson(res, { ok: true });
 	      return;
 	    }
 
 
-    if (pathname === '/api/config') {
-      if (req.method !== 'GET') return send405(res, 'GET');
-      const curatorConfig = getOpusCurationConfigFromEnv();
-      sendJson(res, {
-        provider: {
-          mode: 'anthropic',
-          articleModel: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929'
+	    if (pathname === '/api/config') {
+	      if (req.method !== 'GET') return send405(res, 'GET');
+	      const curatorConfig = getOpusCurationConfigFromEnv();
+	      const emailConfig = getDailyEmailConfig();
+	      sendJson(res, {
+	        provider: {
+	          mode: 'anthropic',
+	          articleModel: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),
@@ -1999,15 +2256,21 @@ async function requestHandler(req, res) {
           hasApiKey: Boolean(curatorConfig.apiKey),
           keyStoriesPerEdition: Number(curatorConfig.keyStoriesPerEdition || 1)
         },
-        pipeline: {
-          dbFile: pipeline.dbFile || null,
-          latestDay: pipeline.getLatestDay() || null,
-          status: pipeline.getStatus()
-        },
-        server: { host: DEFAULT_HOST, port: activePort }
-      });
-      return;
-    }
+	        pipeline: {
+	          dbFile: pipeline.dbFile || null,
+	          latestDay: pipeline.getLatestDay() || null,
+	          status: pipeline.getStatus()
+	        },
+	        email: {
+	          enabled: Boolean(emailConfig.enabled),
+	          provider: 'resend',
+	          configured: Boolean(emailConfig.apiKey && emailConfig.from && emailConfig.to.length),
+	          recipients: emailConfig.to.length
+	        },
+	        server: { host: DEFAULT_HOST, port: activePort }
+	      });
+	      return;
+	    }
 
     if (pathname === '/api/pipeline/status') {
       if (req.method !== 'GET') return send405(res, 'GET');
@@ -2098,9 +2361,9 @@ async function requestHandler(req, res) {
       return;
     }
 
-    if (pathname === '/api/admin/images/jobs/enqueue') {
-      if (req.method !== 'POST') return send405(res, 'POST');
-      const body = await readJsonBody(req);
+	    if (pathname === '/api/admin/images/jobs/enqueue') {
+	      if (req.method !== 'POST') return send405(res, 'POST');
+	      const body = await readJsonBody(req);
       const kind = String(body?.kind || '').trim();
       const yearsForward = clampYears(body?.yearsForward ?? body?.years ?? url.searchParams.get('years') ?? String(EDITION_YEARS));
       const requestedDay = normalizeDay(body?.day) || day || pipeline.getLatestDay() || formatDay();
@@ -2118,12 +2381,23 @@ async function requestHandler(req, res) {
         sendJson(res, result, result && result.ok ? 200 : 400);
         return;
       }
-      sendJson(res, { ok: false, error: 'unknown_kind', kind }, 400);
-      return;
-    }
+	      sendJson(res, { ok: false, error: 'unknown_kind', kind }, 400);
+	      return;
+	    }
 
-    if (pathname === '/api/admin/prerender') {
-      if (req.method !== 'POST') return send405(res, 'POST');
+	    if (pathname === '/api/admin/email/daily') {
+	      if (req.method !== 'POST') return send405(res, 'POST');
+	      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+	      const builtDay = await pipeline.ensureDayBuilt(requestedDay);
+	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+	      const force = parseBooleanLike(url.searchParams.get('force'), true);
+	      const email = await sendDailyEditionEmail({ req, url, day: builtDay, yearsForward, force });
+	      sendJson(res, { ok: Boolean(email?.ok) || Boolean(email?.skipped), day: builtDay, yearsForward, email });
+	      return;
+	    }
+
+	    if (pathname === '/api/admin/prerender') {
+	      if (req.method !== 'POST') return send405(res, 'POST');
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
       const builtDay = await pipeline.ensureDayBuilt(requestedDay);
       const yearsParam = url.searchParams.get('years');
