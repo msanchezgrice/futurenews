@@ -5,10 +5,11 @@
   const DEFAULT_YEARS = 5;
   const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'AI', 'Arts', 'Lifestyle', 'Opinion'];
   const SECTION_ALL = 'All';
-  const EDITION_CACHE_KEY = 'future-times-edition-cache-v16';
-  const ARTICLE_CACHE_KEY = 'future-times-article-cache-v16';
+  const EDITION_CACHE_KEY = 'future-times-edition-cache-v17';
+  const ARTICLE_CACHE_KEY = 'future-times-article-cache-v17';
   const EDITION_TTL_MS = 1000 * 60 * 60;
   const ARTICLE_TTL_MS = 1000 * 60 * 20;
+  const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
   const topLoadingBar = document.getElementById('topLoadingBar');
   const topLoadingBarFill = topLoadingBar ? topLoadingBar.querySelector('.top-loading-bar-fill') : null;
 
@@ -39,9 +40,7 @@
 
   const api = {
     edition: (years, day) => `/api/edition?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    articleRender: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    // WebSocket removed — all rendering via HTTP polling
+    articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`
   };
 
   init();
@@ -140,10 +139,10 @@
 
   function clampYears(raw) {
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) {
+    if (!Number.isFinite(parsed) || parsed <= 0) {
       return DEFAULT_YEARS;
     }
-    return Math.max(0, Math.min(MAX_YEARS, Math.round(parsed)));
+    return Math.max(DEFAULT_YEARS, Math.min(MAX_YEARS, Math.round(parsed)));
   }
 
   function getYearsFromQuery() {
@@ -155,6 +154,29 @@
     const raw = String(day || '').trim();
     if (!raw) return '';
     return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+  }
+
+  function isRenderableArticleImage(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return false;
+    const lower = raw.toLowerCase();
+    for (const marker of BLOCKED_IMAGE_MARKERS) {
+      if (lower.includes(marker)) return false;
+    }
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      if (lower.includes('.public.blob.vercel-storage.com/')) return true;
+      if (lower.includes('/assets/img/generated/')) return true;
+      if (lower.includes('/assets/img/library/')) return true;
+      return false;
+    }
+    if (lower.startsWith('assets/img/generated/') || lower.startsWith('/assets/img/generated/')) return true;
+    if (lower.startsWith('assets/img/library/') || lower.startsWith('/assets/img/library/')) return true;
+    return false;
+  }
+
+  function sanitizeArticleImage(value) {
+    const raw = String(value || '').trim();
+    return isRenderableArticleImage(raw) ? raw : '';
   }
 
   function getDayFromQuery() {
@@ -281,6 +303,18 @@
       }
 
       location.href = getEditionUrlWithSection(years, nextSection, day);
+    });
+  }
+
+  function updateSectionNavVisibility(payload) {
+    const nav = document.getElementById('sectionNav');
+    if (!nav) return;
+    const articles = payload && Array.isArray(payload.articles) ? payload.articles : [];
+    const activeSections = new Set(articles.map((a) => normalizeSection(a.section || '')));
+    activeSections.add(SECTION_ALL);
+    nav.querySelectorAll('a[data-section]').forEach((link) => {
+      const sec = normalizeSection(link.dataset.section || '');
+      link.style.display = activeSections.has(sec) ? '' : 'none';
     });
   }
 
@@ -485,15 +519,27 @@
     return response.json();
   }
 
+  function filterCuratedArticles(payload) {
+    if (!payload || !Array.isArray(payload.articles)) return payload;
+    const before = payload.articles.length;
+    payload.articles = payload.articles.filter((a) => {
+      const conf = Number(a.confidence) || Number(a.curation?.confidence) || 0;
+      const hasBody = (a.body || '').trim().length > 50;
+      return conf > 0 || hasBody;
+    });
+    return payload;
+  }
+
   async function getEditionPayload(years, day = '') {
     const cacheKey = `${normalizeDay(day) || 'latest'}|${String(years)}`;
     const cached = loadCacheKey('edition', cacheKey, EDITION_TTL_MS);
     try {
       const payload = await fetchJSON(api.edition(years, day));
+      filterCuratedArticles(payload);
       setCacheKey('edition', cacheKey, payload, EDITION_TTL_MS);
       return payload;
     } catch (err) {
-      if (cached) return cached;
+      if (cached) return filterCuratedArticles(cached);
       throw err;
     }
   }
@@ -580,6 +626,7 @@
           state.day = resolvedDay || state.day;
         }
         updateEditionHeader(payload);
+        updateSectionNavVisibility(payload);
         const heroId = renderHero(payload, clamped, section, state.day);
         const shownIds = renderSectionPanels(payload, clamped, section, state.day, heroId);
         renderSideRailTiles(payload, clamped, section, state.day, heroId, shownIds);
@@ -635,9 +682,14 @@
       setText('aSection', heroArticle.section || 'Future');
     }
 
-    if (heroImage) {
-      heroImage.src = heroArticle.image || heroImage.src;
+    const heroMedia = document.getElementById('heroMedia');
+    const heroImageUrl = sanitizeArticleImage(heroArticle.image);
+    if (heroImage && heroImageUrl) {
+      heroImage.src = heroImageUrl;
       heroImage.alt = heroArticle.title || 'Lead story';
+      if (heroMedia) heroMedia.style.display = '';
+    } else {
+      if (heroMedia) heroMedia.style.display = 'none';
     }
 
     return heroArticle.id;
@@ -844,11 +896,6 @@
       const status = await fetchJSON(api.articleStatus(articleId, years, day));
       if (status.status === 'ready') {
         setCachedArticle(articleId, years, day, status.article);
-      } else {
-        const started = await fetchJSON(api.articleRender(articleId, years, day), { method: 'POST' });
-        if (started.status === 'ready' && started.article) {
-          setCachedArticle(articleId, years, day, started.article);
-        }
       }
     } catch {
       // Prefetch is opportunistic only.
@@ -892,7 +939,7 @@
       if (renderCard) {
         renderCard.style.display = 'block';
       }
-      setProgress('Checking live render cache…', 8);
+      setProgress('Checking published article…', 8);
 
       let editionPayload = getCachedEdition(clampedYears, normalizedDay);
       if (!editionPayload) {
@@ -938,7 +985,16 @@
         }
       }
       if (articleSeed) {
-        renderArticlePayload(articleSeedToArticle(articleSeed, clampedYears), { cached: false, partial: true });
+        const seedArticle = articleSeedToArticle(articleSeed, clampedYears);
+        const seedHasBody = (seedArticle.body || '').trim().length > 220;
+        if (seedHasBody) {
+          setCachedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, seedArticle);
+          renderArticlePayload(seedArticle, { cached: true });
+          if (renderCard) renderCard.style.display = 'none';
+          setProgress('Loaded', 100);
+          finishTopLoad();
+          return seedArticle;
+        }
       } else {
         setText('aTitle', 'Loading article…');
       }
@@ -954,21 +1010,7 @@
         finishTopLoad();
         return statusPayload.article;
       }
-
-      // Trigger server-side rendering (Sonnet API)
-      await fetchJSON(api.articleRender(articleId, clampedYears, normalizeDay(day) || normalizedDay), { method: 'POST' });
-      setProgress('Generating article with Sonnet...', 20);
-
-      // Poll for the rendered article
-      const renderedArticle = await pollRenderedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, setProgress);
-      setCachedArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay, renderedArticle);
-      renderArticlePayload(renderedArticle, { cached: false });
-      if (renderCard) {
-        renderCard.style.display = 'none';
-      }
-      setProgress('Render complete', 100);
-      finishTopLoad();
-      return renderedArticle;
+      throw new Error(statusPayload.error || 'Article not published yet');
     })();
 
     inflightArticles.set(pageKey, promise);
@@ -993,10 +1035,10 @@
       const status = `${error.message || 'unknown error'}`;
 
       if (statusText) {
-        statusText.textContent = `Render failed: ${status}`;
+        statusText.textContent = `Article unavailable: ${status}`;
       }
       if (progressText) {
-        progressText.textContent = 'Using cached fallback if available.';
+        progressText.textContent = 'Published after daily refresh.';
       }
       if (progress) {
         progress.style.width = '0%';
@@ -1005,29 +1047,13 @@
       if (section) section.textContent = 'Article';
       if (dek) dek.textContent = status;
       if (meta) meta.textContent = `Edition: ${clampYears(years)} years`;
-      if (hero) hero.src = 'assets/img/humanoids-labor-market.svg';
-      if (prompt) prompt.textContent = 'Unavailable until render backend responds.';
+      if (hero) hero.style.display = 'none';
+      if (prompt) prompt.textContent = 'Unavailable until the next daily curated publish.';
       if (body) {
-        body.innerHTML = '<p>The selected article could not be loaded right now. Please try another year value or return to the front page.</p>';
+        body.innerHTML = '<p>This story is not published yet. It will appear after the next daily curated pre-render run.</p>';
       }
       throw error;
     }
-  }
-
-  async function pollRenderedArticle(articleId, years, day, setProgress) {
-    const maxAttempts = 30;
-    const pollingMs = 450;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const status = await fetchJSON(api.articleStatus(articleId, years, day));
-      const percent = Math.min(95, 10 + attempt * 2.7);
-      if (status.status === 'ready' && status.article) {
-        setProgress('Render finished', 100);
-        return status.article;
-      }
-      setProgress('Render queued', percent);
-      await delay(pollingMs);
-    }
-    throw new Error('Render polling timed out');
   }
 
   function articleSeedToArticle(seed, years) {
@@ -1038,13 +1064,15 @@
       title: seed.title,
       dek: seed.dek,
       meta: String(seed.meta || seed.baseMeta || fallbackMeta || ''),
-      image: seed.image,
-      body: '',
+      image: sanitizeArticleImage(seed.image),
+      body: seed.body || '',
+      confidence: seed.confidence || 0,
       signals: seed.signals || [],
       markets: seed.markets || [],
       prompt: seed.prompt || '',
       editionDate: getDateFromYears(years),
       generatedAt: new Date().toISOString(),
+      curationGeneratedAt: seed.curation?.generatedAt || '',
       yearsForward: years
     };
   }
@@ -1069,7 +1097,7 @@
     tag.textContent = `Edition • ${date}`;
   }
 
-  function renderArticlePayload(article, options = { cached: false, partial: false }) {
+  function renderArticlePayload(article, options = { cached: false }) {
     if (!article) return;
     const section = document.getElementById('aSection');
     const title = document.getElementById('aTitle');
@@ -1103,8 +1131,9 @@
     }
 
     if (hero) {
-      if (article.image) {
-        hero.src = article.image;
+      const imageUrl = sanitizeArticleImage(article.image);
+      if (imageUrl) {
+        hero.src = imageUrl;
         hero.alt = article.title || 'Article hero';
         hero.style.display = '';
       } else {
@@ -1114,16 +1143,12 @@
 
     if (prompt) setTextElement(prompt, article.prompt || '');
 
-    if (options.partial) {
-      if (status) status.textContent = 'Streaming live content…';
-      if (progressText) progressText.textContent = 'Streaming';
-      if (progress) progress.style.width = '40%';
-    } else if (options.cached) {
+    if (options.cached) {
       if (status) status.textContent = 'Loaded from cache';
       if (progressText) progressText.textContent = 'No stream required.';
       if (progress) progress.style.width = '100%';
     } else {
-      if (status) status.textContent = 'Rendering complete';
+      if (status) status.textContent = 'Loaded';
       if (progressText) progressText.textContent = '';
       if (progress) progress.style.width = '100%';
     }
@@ -1133,87 +1158,9 @@
       md.innerHTML = markdownToHtml(article.body || '');
     }
 
-    // Show "Read full article" button for short articles (backfilled 1-paragraph)
-    const expandWrap = document.getElementById('expandWrap');
-    const expandBtn = document.getElementById('expandBtn');
-    if (expandWrap && expandBtn) {
-      const bodyText = (article.body || '').trim();
-      const paragraphs = bodyText.split(/\n\s*\n/).filter(p => p.trim().length > 30);
-      const isShort = paragraphs.length <= 2 && bodyText.length < 1500;
-      expandWrap.style.display = isShort && bodyText.length > 50 ? '' : 'none';
-
-      if (isShort && bodyText.length > 50) {
-        const newBtn = expandBtn.cloneNode(true);
-        expandBtn.parentNode.replaceChild(newBtn, expandBtn);
-        newBtn.addEventListener('click', () => expandArticleBody(article.id));
-      }
-    }
-
     const statusBlock = document.getElementById('renderStatus');
-    if (statusBlock && !options.partial) {
-      statusBlock.style.display = options.cached ? 'none' : statusBlock.style.display;
-      if (statusBlock.style.display === '') {
-        statusBlock.style.display = 'block';
-      }
-    }
-  }
-
-  async function expandArticleBody(articleId) {
-    const expandWrap = document.getElementById('expandWrap');
-    const expandBtn = document.getElementById('expandBtn');
-    const expandStatus = document.getElementById('expandStatus');
-    const md = document.getElementById('md');
-    if (!md || !articleId) return;
-
-    if (expandBtn) { expandBtn.disabled = true; expandBtn.textContent = 'Expanding…'; }
-    if (expandStatus) expandStatus.textContent = 'Connecting to Sonnet…';
-
-    try {
-      const resp = await fetch(`/api/article/${encodeURIComponent(articleId)}/expand`, { method: 'POST' });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let fullBody = '';
-
-      if (expandStatus) expandStatus.textContent = 'Writing full article…';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const d = line.slice(6).trim();
-          if (!d) continue;
-          try {
-            const evt = JSON.parse(d);
-            if (evt.type === 'chunk' && evt.delta) {
-              fullBody += evt.delta;
-              md.innerHTML = markdownToHtml(fullBody);
-            } else if (evt.type === 'complete') {
-              fullBody = evt.body || fullBody;
-              md.innerHTML = markdownToHtml(fullBody);
-            } else if (evt.type === 'error') {
-              throw new Error(evt.error || 'Expansion failed');
-            }
-          } catch (e) {
-            if (e.message !== 'Expansion failed') { /* skip parse errors */ }
-            else throw e;
-          }
-        }
-      }
-
-      if (expandWrap) expandWrap.style.display = 'none';
-      if (expandStatus) expandStatus.textContent = '';
-    } catch (err) {
-      if (expandBtn) { expandBtn.disabled = false; expandBtn.textContent = 'Read full article'; }
-      if (expandStatus) { expandStatus.textContent = 'Failed: ' + (err.message || err); expandStatus.style.color = '#c0392b'; }
+    if (statusBlock) {
+      statusBlock.style.display = 'none';
     }
   }
 

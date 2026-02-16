@@ -34,6 +34,7 @@ const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 
 const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
+const MIN_PUBLISHED_BODY_CHARS = Math.max(220, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 420));
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -190,6 +191,125 @@ function keyFor(storyId, story = null) {
 function hasRenderableBody(article, minChars = 140) {
   const body = String(article?.body || '').trim();
   return body.length >= minChars;
+}
+
+function hasPublishableHeadlineAndDek(article) {
+  const title = String(article?.title || '').trim();
+  const dek = String(article?.dek || '').trim();
+  if (!title || title.length < 8) return false;
+  if (!dek || dek.length < 16) return false;
+  const lowTitle = title.toLowerCase();
+  const lowDek = dek.toLowerCase();
+  if (lowTitle.startsWith('future illustration')) return false;
+  if (lowDek.startsWith('a 2031 report on')) return false;
+  if (lowDek.startsWith('a 2030 report on')) return false;
+  if (lowDek.startsWith('a 2029 report on')) return false;
+  return true;
+}
+
+function isPublishReadyArticle(article) {
+  return hasRenderableBody(article, MIN_PUBLISHED_BODY_CHARS) && hasPublishableHeadlineAndDek(article);
+}
+
+function getPreRenderedArticle(storyId, story = null) {
+  const key = keyFor(storyId, story);
+  const mem = cacheByKey.get(key);
+  if (mem && isPublishReadyArticle(mem)) return mem;
+  const dbCached = pipeline.getRenderedVariant(storyId, { curationGeneratedAt: story?.curation?.generatedAt || '' });
+  if (dbCached && isPublishReadyArticle(dbCached)) {
+    cacheByKey.set(key, dbCached);
+    return dbCached;
+  }
+  return null;
+}
+
+function filterEditionToPublishedArticles(payload) {
+  const base = payload && typeof payload === 'object' ? payload : null;
+  if (!base) return payload;
+  const articles = Array.isArray(base.articles) ? base.articles : [];
+  if (!articles.length) return { ...base, articles: [], heroId: null, heroStoryId: null };
+
+  const filtered = [];
+  for (const article of articles) {
+    const id = String(article?.id || '').trim();
+    if (!id) continue;
+    const story = pipeline.getStory(id);
+    const rendered = getPreRenderedArticle(id, story);
+    if (!rendered) continue;
+    filtered.push({
+      ...article,
+      title: String(rendered.title || article.title || '').trim(),
+      dek: String(rendered.dek || article.dek || '').trim(),
+      meta: String(rendered.meta || article.meta || '').trim(),
+      image: String(rendered.image || article.image || '').trim(),
+      confidence: Number.isFinite(Number(rendered.confidence))
+        ? Math.max(0, Math.min(100, Math.round(Number(rendered.confidence))))
+        : Number.isFinite(Number(article?.confidence))
+          ? Math.max(0, Math.min(100, Math.round(Number(article.confidence))))
+          : 0
+    });
+  }
+
+  const currentHeroId = String(base.heroId || base.heroStoryId || '').trim();
+  const resolvedHeroId =
+    (currentHeroId && filtered.some((entry) => String(entry.id || '') === currentHeroId))
+      ? currentHeroId
+      : (filtered[0]?.id || null);
+
+  return {
+    ...base,
+    heroId: resolvedHeroId,
+    heroStoryId: resolvedHeroId,
+    articles: filtered
+  };
+}
+
+function prewarmRenderCacheForDay(day, yearsList = [EDITION_YEARS]) {
+  const uniqYears = Array.from(new Set((Array.isArray(yearsList) ? yearsList : [EDITION_YEARS])
+    .map((v) => clampYears(v))
+    .filter((v) => Number.isFinite(v))));
+
+  const storyIds = [];
+  const seen = new Set();
+  for (const y of uniqYears) {
+    const edition = pipeline.getEdition(day, y);
+    const articles = Array.isArray(edition?.articles) ? edition.articles : [];
+    for (const article of articles) {
+      const id = String(article?.id || '').trim();
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      storyIds.push(id);
+    }
+  }
+
+  let rendered = 0;
+  let missing = 0;
+  let skippedNoBody = 0;
+  for (const storyId of storyIds) {
+    const story = pipeline.getStory(storyId);
+    if (!story) {
+      missing++;
+      continue;
+    }
+    const seedArticle = buildSeedArticleFromStory(story);
+    if (!isPublishReadyArticle(seedArticle)) {
+      skippedNoBody++;
+      continue;
+    }
+    pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: story?.curation?.generatedAt || null });
+    cacheByKey.set(keyFor(storyId, story), seedArticle);
+    rendered++;
+  }
+
+  return {
+    ok: true,
+    day,
+    years: uniqYears,
+    stories: storyIds.length,
+    rendered,
+    missing,
+    skippedNoBody
+  };
 }
 
 function splitToChunks(text, size) {
@@ -376,8 +496,8 @@ function buildForecastBody(story) {
     return draftBody;
   }
 
-  // No draft available — return empty. The real article will be rendered on click
-  // by calling the Anthropic API (Sonnet) with the curator directions.
+  // No full draft available. We do not render at request-time; unpublished stories
+  // stay unavailable until the next curated/pre-render pass.
   return '';
 }
 
@@ -2164,6 +2284,7 @@ async function requestHandler(req, res) {
 	      const curated = await pipeline.curateDay(builtDay, { force: false });
 	      const flags = getFutureImagesFlags();
 	      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+	      const prerender = prewarmRenderCacheForDay(builtDay, [yearsForward]);
 	      const heroes = flags.imagesEnabled && flags.storyHeroEnabled
 	        ? await enqueueSectionHeroJobs({ day: builtDay, pipeline, yearsForward, force: false, includeGlobalHero: true })
 	        : { ok: true, skipped: true, reason: 'story_heroes_disabled' };
@@ -2174,7 +2295,7 @@ async function requestHandler(req, res) {
 	            maxMs: Number(url.searchParams.get('heroWorkerMaxMs') || 220000)
 	          })
 	        : { ok: true, skipped: true, reason: 'story_heroes_disabled' };
-	      sendJson(res, { ok: true, day: builtDay, curated, heroes, heroWorker });
+	      sendJson(res, { ok: true, day: builtDay, curated, prerender, heroes, heroWorker });
 	      return;
 	    }
 
@@ -2404,48 +2525,8 @@ async function requestHandler(req, res) {
       const yearsList = yearsParam
         ? [clampYears(yearsParam)]
         : Array.from({ length: 11 }, (_, i) => i);
-
-      const storyIds = [];
-      const seen = new Set();
-      for (const y of yearsList) {
-        const edition = pipeline.getEdition(builtDay, y);
-        const articles = Array.isArray(edition?.articles) ? edition.articles : [];
-        for (const article of articles) {
-          const id = String(article?.id || '').trim();
-          if (!id || seen.has(id)) continue;
-          seen.add(id);
-          storyIds.push(id);
-        }
-      }
-
-      let rendered = 0;
-      let missing = 0;
-      let skippedNoBody = 0;
-      for (const storyId of storyIds) {
-        const story = pipeline.getStory(storyId);
-        if (!story) {
-          missing++;
-          continue;
-        }
-        const seedArticle = buildSeedArticleFromStory(story);
-        if (!hasRenderableBody(seedArticle)) {
-          skippedNoBody++;
-          continue;
-        }
-        pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: story?.curation?.generatedAt || null });
-        cacheByKey.set(keyFor(storyId, story), seedArticle);
-        rendered++;
-      }
-
-      sendJson(res, {
-        ok: true,
-        day: builtDay,
-        years: yearsList,
-        stories: storyIds.length,
-        rendered,
-        missing,
-        skippedNoBody
-      });
+      const result = prewarmRenderCacheForDay(builtDay, yearsList);
+      sendJson(res, result);
       return;
     }
 
@@ -2561,7 +2642,8 @@ async function requestHandler(req, res) {
       }
       await pipeline.refresh({ day: builtDay, force: forceRefresh });
       const result = await pipeline.curateDay(builtDay, { force: forceCuration });
-      sendJson(res, { ok: true, day: builtDay, refreshed: true, curated: result });
+      const prerender = prewarmRenderCacheForDay(builtDay, [EDITION_YEARS]);
+      sendJson(res, { ok: true, day: builtDay, refreshed: true, curated: result, prerender });
       return;
     }
 
@@ -3072,152 +3154,22 @@ async function requestHandler(req, res) {
       } catch {
         // best-effort: never break newspaper
       }
-      sendJson(res, decorated);
+      sendJson(res, filterEditionToPublishedArticles(decorated));
       return;
     }
 
-    // ── Expand short article body to full-length via Sonnet (real-time SSE) ──
+    // Real-time expansion is disabled. Articles must be pre-rendered.
     if (pathname.match(/^\/api\/article\/.+\/expand$/)) {
-      if (req.method !== 'POST') { send405(res, 'POST'); return; }
-      const storyId = pathname.replace('/api/article/', '').replace('/expand', '');
-      if (!storyId) { sendNotFound(res); return; }
-
-      let story = pipeline.getStory(storyId);
-      if (!story) {
-        const match = String(storyId).match(/^ft-(\d{4}-\d{2}-\d{2})-y(\d+)/);
-        if (match) { await pipeline.ensureDayBuilt(match[1]); story = pipeline.getStory(storyId); }
-      }
-      if (!story) { sendJson(res, { error: 'not_found' }, 404); return; }
-
-      const existing = getArticleStatus(storyId, story);
-      const currentBody = existing?.article?.body || '';
-
-      const curation = story?.curation || {};
-      const editionDate = story?.evidencePack?.editionDate || '';
-      const baselineDay = normalizeDay(story.day) || formatDay();
-      const baselineYear = baselineDay.slice(0, 4) || '2026';
-      const targetYear = Number(baselineYear) + (Number.isFinite(Number(story.yearsForward)) ? Number(story.yearsForward) : 0);
-      const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || story.title || '';
-      const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || story.dek || '';
-      const directions = curation?.sparkDirections || '';
-      const eventSeed = curation?.futureEventSeed || '';
-
-      const expandPrompt = [
-        `You are writing a full-length article for The Future Times, published on ${editionDate || targetYear}.`,
-        `Write it as a REAL news report from ${targetYear}. You are a journalist in ${targetYear} reporting on events happening NOW.`,
-        ``,
-        `CRITICAL RULES:`,
-        `- Write about what is HAPPENING in ${targetYear}, not about what happened in ${baselineYear}.`,
-        `- Do NOT frame as "anniversary" or "looking back" pieces.`,
-        `- Do NOT reference or link to original news stories from ${baselineYear}.`,
-        `- Write PREDICTIONS and PLAUSIBLE OUTCOMES: policies, technologies, markets, specific numbers.`,
-        `- Do not describe the article as a projection, simulation, or prompt output.`,
-        ``,
-        `You have a SHORT DRAFT of this article. EXPAND it into a full 5-7 paragraph article.`,
-        `Keep the same facts, tone, and angle but add depth: more context, quotes from plausible sources, specific data, implications.`,
-        `Output narrative paragraphs only (NYT-style prose, no markdown headers, no bullet lists, no Sources section).`,
-        ``,
-        directions ? `Curator directions: ${directions}` : '',
-        eventSeed ? `Future event seed: ${eventSeed}` : '',
-        ``,
-        `Headline: ${title}`,
-        dek ? `Dek: ${dek}` : '',
-        ``,
-        `SHORT DRAFT TO EXPAND:`,
-        currentBody,
-        ``,
-        `Write the full expanded article body now.`
-      ].filter(Boolean).join('\n');
-
-      const opusCfg = readOpusRuntimeConfig() || {};
-      const apiKey = process.env.ANTHROPIC_API_KEY || opusCfg.apiKey || '';
-      if (!apiKey) { sendJson(res, { error: 'no_api_key' }, 500); return; }
-
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 120000);
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929',
-            max_tokens: 4096,
-            temperature: 0.6,
-            stream: true,
-            messages: [{ role: 'user', content: expandPrompt }]
-          }),
-          signal: controller.signal
-        });
-
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => '');
-          res.write(`data: ${JSON.stringify({ type: 'error', error: `API ${resp.status}: ${errText.slice(0, 200)}` })}\n\n`);
-          res.end();
-          clearTimeout(timeout);
-          return;
-        }
-
-        let fullBody = '';
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
-        let sseBuffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          sseBuffer += decoder.decode(value, { stream: true });
-
-          const lines = sseBuffer.split('\n');
-          sseBuffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const d = line.slice(6).trim();
-            if (d === '[DONE]') continue;
-            try {
-              const evt = JSON.parse(d);
-              if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-                const text = evt.delta.text || '';
-                fullBody += text;
-                res.write(`data: ${JSON.stringify({ type: 'chunk', delta: text })}\n\n`);
-              }
-            } catch { /* skip */ }
-          }
-        }
-
-        clearTimeout(timeout);
-
-        if (fullBody.trim().length > 200) {
-          const expandedArticle = {
-            ...(existing?.article || {}),
-            body: fullBody.trim(),
-            expandedAt: new Date().toISOString()
-          };
-          pipeline.storeRendered(storyId, expandedArticle, { curationGeneratedAt: curation?.generatedAt || null });
-          cacheByKey.set(keyFor(storyId, story), expandedArticle);
-        }
-
-        res.write(`data: ${JSON.stringify({ type: 'complete', body: fullBody.trim() })}\n\n`);
-        res.end();
-      } catch (err) {
-        res.write(`data: ${JSON.stringify({ type: 'error', error: String(err?.message || err) })}\n\n`);
-        res.end();
-      }
+      if (req.method !== 'POST') return send405(res, 'POST');
+      sendJson(res, { ok: false, error: 'realtime_expand_disabled' }, 410);
       return;
     }
 
     if (pathname.startsWith('/api/article/')) {
+      if (req.method !== 'GET') {
+        send405(res, 'GET');
+        return;
+      }
       const storyId = parseStoryIdFromPath(pathname);
       if (!storyId) {
         sendNotFound(res);
@@ -3237,97 +3189,18 @@ async function requestHandler(req, res) {
         return;
       }
 
-      const status = getArticleStatus(storyId, story);
-
-      if (req.method === 'GET') {
-        if (status.status === 'ready') {
-          let article = status.article;
-          try {
-            article = await decorateArticlePayload(status.article, { day: story.day, yearsForward: story.yearsForward, storyId });
-          } catch {
-            // ignore
-          }
-          sendJson(res, { status: 'ready', article });
-          return;
-        }
-        if (status.status === 'queued' || status.status === 'streaming') {
-          const started = startRenderJob(storyId, story);
-          if (started.status === 'cached' && started.article) {
-            let article = started.article;
-            try {
-              article = await decorateArticlePayload(started.article, { day: story.day, yearsForward: story.yearsForward, storyId });
-            } catch {
-              // ignore
-            }
-            sendJson(res, { status: 'ready', article });
-            return;
-          }
-          if (started.status === 'started' || started.status === 'running') {
-            const active = started.job || getActiveJob(started.key);
-            if (active) {
-              const awaited = await waitForRenderJob(active, 130000);
-              if (awaited.status === 'ready' && awaited.article) {
-                let article = awaited.article;
-                try {
-                  article = await decorateArticlePayload(awaited.article, { day: story.day, yearsForward: story.yearsForward, storyId });
-                } catch {
-                  // ignore
-                }
-                sendJson(res, { status: 'ready', article });
-                return;
-              }
-              if (awaited.status === 'error') {
-                sendJson(res, { status: 'error', storyId, error: awaited.error }, 500);
-                return;
-              }
-            }
-          }
-        }
-        sendJson(res, { status: status.status, startedAt: status.startedAt, storyId });
+      const preRendered = getPreRenderedArticle(storyId, story);
+      if (!preRendered) {
+        sendJson(res, { status: 'not_ready', storyId, error: 'article_not_pre_rendered' }, 409);
         return;
       }
-
-      if (req.method === 'POST') {
-        const started = startRenderJob(storyId, story);
-        if (started.status === 'not_found') {
-          sendJson(res, { status: 'not_found', storyId, error: 'Unknown story id' }, 404);
-          return;
-        }
-        if (started.status === 'cached') {
-          let article = started.article;
-          try {
-            article = await decorateArticlePayload(started.article, { day: story.day, yearsForward: story.yearsForward, storyId });
-          } catch {
-            // ignore
-          }
-          sendJson(res, { status: 'ready', article });
-          return;
-        }
-        if (started.status === 'started' || started.status === 'running') {
-          const active = started.job || getActiveJob(started.key);
-          if (active) {
-            const awaited = await waitForRenderJob(active, 130000);
-            if (awaited.status === 'ready' && awaited.article) {
-              let article = awaited.article;
-              try {
-                article = await decorateArticlePayload(awaited.article, { day: story.day, yearsForward: story.yearsForward, storyId });
-              } catch {
-                // ignore
-              }
-              sendJson(res, { status: 'ready', article });
-              return;
-            }
-            if (awaited.status === 'error') {
-              sendJson(res, { status: 'error', storyId, error: awaited.error }, 500);
-              return;
-            }
-          }
-        }
-        sendJson(res, { status: started.status, storyId, years: story.yearsForward, day: story.day });
-        return;
+      let article = preRendered;
+      try {
+        article = await decorateArticlePayload(preRendered, { day: story.day, yearsForward: story.yearsForward, storyId });
+      } catch {
+        // best effort
       }
-
-      send405(res, 'GET, POST');
+      sendJson(res, { status: 'ready', article });
       return;
     }
 
@@ -3362,45 +3235,8 @@ function socketHandler(socket) {
       safeSend(socket, { type: 'render.error', error: `Unknown message type: ${message.type}` });
       return;
     }
-
-    const storyId = message.articleId || message.storyId;
     const requestId = message.requestId || `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    if (!storyId) {
-      safeSend(socket, { type: 'render.error', requestId, error: 'articleId missing' });
-      return;
-    }
-
-    let story = pipeline.getStory(storyId);
-    if (!story) {
-      const match = String(storyId).match(/^ft-(\d{4}-\d{2}-\d{2})-y(\d+)/);
-      if (match) {
-        await pipeline.ensureDayBuilt(match[1]);
-        story = pipeline.getStory(storyId);
-      }
-    }
-    if (!story) {
-      safeSend(socket, { type: 'render.error', requestId, error: `Unknown story: ${storyId}` });
-      return;
-    }
-
-    const key = keyFor(storyId, story);
-    const cached =
-      cacheByKey.get(key) || pipeline.getRenderedVariant(storyId, { curationGeneratedAt: story?.curation?.generatedAt || '' });
-    if (cached) {
-      cacheByKey.set(key, cached);
-      safeSend(socket, { type: 'render.complete', requestId, articleId: storyId, article: cached });
-      return;
-    }
-
-    const jobState = startRenderJob(storyId, story);
-    const job = jobState.job || getActiveJob(key);
-    if (!job) {
-      safeSend(socket, { type: 'render.error', requestId, error: `Unable to start render: ${storyId}` });
-      return;
-    }
-
-    subscribeSocketToJob(job, socket, requestId);
-    safeSend(socket, { type: 'render.queued', requestId, articleId: storyId, status: job.status, startedAt: job.startedAt });
+    safeSend(socket, { type: 'render.error', requestId, error: 'realtime_render_disabled' });
   });
 
   socket.on('close', () => {
