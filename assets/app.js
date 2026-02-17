@@ -37,12 +37,12 @@
   const prefetchedArticles = new Set();
   let topLoadingTicker = null;
   let editionAutoRefreshTimer = null;
-  let editionDaysMeta = null;
+  const editionDaysMetaByYears = new Map();
 
   const api = {
     edition: (years, day) => `/api/edition?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
     articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    editionDays: (limit = 365) => `/api/edition-days?limit=${encodeURIComponent(String(limit))}`
+    editionDays: (years = DEFAULT_YEARS, limit = 365) => `/api/edition-days?years=${encodeURIComponent(String(clampYears(years)))}&limit=${encodeURIComponent(String(limit))}`
   };
 
   init();
@@ -157,6 +157,14 @@
     const raw = String(day || '').trim();
     if (!raw) return '';
     return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : '';
+  }
+
+  function getTodayDay() {
+    const now = new Date();
+    const yyyy = String(now.getFullYear()).padStart(4, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
   }
 
   function isRenderableArticleImage(value) {
@@ -295,30 +303,92 @@
     });
   }
 
-  async function fetchEditionDaysMeta() {
-    if (editionDaysMeta) return editionDaysMeta;
+  function formatEditionDayLabel(day) {
+    const normalized = normalizeDay(day);
+    if (!normalized) return '';
+    const parsed = new Date(`${normalized}T12:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) return normalized;
+    return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  }
+
+  function pickAllowedEditionDay(meta, preferredDay = '') {
+    const days = Array.isArray(meta?.days) ? meta.days : [];
+    const requested = normalizeDay(preferredDay);
+    if (requested && days.includes(requested)) return requested;
+    return normalizeDay(meta?.latestDay || days[0] || '');
+  }
+
+  async function fetchEditionDaysMeta(years = DEFAULT_YEARS) {
+    const clampedYears = clampYears(years);
+    const cacheKey = String(clampedYears);
+    if (editionDaysMetaByYears.has(cacheKey)) return editionDaysMetaByYears.get(cacheKey);
     try {
-      const payload = await fetchJSON(api.editionDays(365));
-      const days = Array.isArray(payload?.days)
-        ? payload.days.map((entry) => normalizeDay(entry)).filter(Boolean)
-        : [];
-      editionDaysMeta = {
+      const payload = await fetchJSON(api.editionDays(clampedYears, 365));
+      const today = getTodayDay();
+      const sourceDays = Array.isArray(payload?.days) ? payload.days : [];
+      const seen = new Set();
+      const days = [];
+      for (const entry of sourceDays) {
+        const normalized = normalizeDay(entry);
+        if (!normalized || normalized > today || seen.has(normalized)) continue;
+        seen.add(normalized);
+        days.push(normalized);
+      }
+      days.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+
+      const payloadLatest = normalizeDay(payload?.latestDay || '');
+      const payloadOldest = normalizeDay(payload?.oldestDay || '');
+      const latestDay = payloadLatest && days.includes(payloadLatest) ? payloadLatest : normalizeDay(days[0] || '');
+      const oldestDay = payloadOldest && days.includes(payloadOldest) ? payloadOldest : normalizeDay(days[days.length - 1] || '');
+      const meta = {
         days,
-        latestDay: normalizeDay(payload?.latestDay || days[0] || ''),
-        oldestDay: normalizeDay(payload?.oldestDay || days[days.length - 1] || '')
+        latestDay,
+        oldestDay
       };
+      editionDaysMetaByYears.set(cacheKey, meta);
     } catch {
-      editionDaysMeta = { days: [], latestDay: '', oldestDay: '' };
+      editionDaysMetaByYears.set(cacheKey, { days: [], latestDay: '', oldestDay: '' });
     }
-    return editionDaysMeta;
+    return editionDaysMetaByYears.get(cacheKey);
+  }
+
+  function syncEditionDayOptions(select, meta, preferredDay = '') {
+    if (!select) return '';
+    const days = Array.isArray(meta?.days) ? meta.days : [];
+    const optionsSignature = days.join('|');
+    if (select.dataset.dayOptions !== optionsSignature) {
+      select.textContent = '';
+      for (const day of days) {
+        const option = document.createElement('option');
+        option.value = day;
+        option.textContent = formatEditionDayLabel(day) || day;
+        select.appendChild(option);
+      }
+      select.dataset.dayOptions = optionsSignature;
+    }
+    select.disabled = days.length === 0;
+    const nextDay = pickAllowedEditionDay(meta, preferredDay);
+    if (nextDay && select.value !== nextDay) {
+      select.value = nextDay;
+    }
+    if (!nextDay) {
+      select.value = '';
+    }
+    return normalizeDay(select.value);
   }
 
   function setEditionDayControlValue(day = '') {
-    const input = document.getElementById('editionDay');
-    if (!input) return;
+    const select = document.getElementById('editionDay');
+    if (!select) return;
     const normalized = normalizeDay(day) || normalizeDay(state.day) || normalizeDay(getDayFromQuery()) || '';
-    if (input.value !== normalized) {
-      input.value = normalized;
+    if (normalized && Array.from(select.options).some((option) => option.value === normalized)) {
+      if (select.value !== normalized) {
+        select.value = normalized;
+      }
+      return;
+    }
+    if (!normalized && select.options.length && select.value !== select.options[0].value) {
+      select.value = select.options[0].value;
     }
   }
 
@@ -354,6 +424,10 @@
       input.dataset.futurenewsBound = '1';
       input.addEventListener('change', () => {
         const selectedDay = normalizeDay(input.value) || '';
+        if (!selectedDay) {
+          finishTopLoad();
+          return;
+        }
         startTopLoad(12);
         navigateToEditionDay(selectedDay);
       });
@@ -363,7 +437,7 @@
       latestBtn.dataset.futurenewsBound = '1';
       latestBtn.addEventListener('click', async () => {
         startTopLoad(10);
-        const meta = await fetchEditionDaysMeta();
+        const meta = await fetchEditionDaysMeta(getYearsFromQuery());
         const latestDay = normalizeDay(meta.latestDay || '');
         if (latestDay) {
           input.value = latestDay;
@@ -374,10 +448,15 @@
       });
     }
 
-    fetchEditionDaysMeta().then((meta) => {
-      const maxDay = normalizeDay(meta.latestDay || '');
-      if (!normalizeDay(input.value) && maxDay && !normalizeDay(getDayFromQuery())) {
-        input.value = maxDay;
+    fetchEditionDaysMeta(years).then((meta) => {
+      const requestedDay = normalizeDay(day) || normalizeDay(getDayFromQuery()) || normalizeDay(state.day) || '';
+      const selectedDay = syncEditionDayOptions(input, meta, requestedDay);
+      if (latestBtn) {
+        latestBtn.disabled = !normalizeDay(meta.latestDay || '');
+      }
+      if (requestedDay && selectedDay && requestedDay !== selectedDay) {
+        startTopLoad(8);
+        navigateToEditionDay(selectedDay, { force: true });
       }
     }).catch(() => {});
 

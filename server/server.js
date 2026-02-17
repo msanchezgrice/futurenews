@@ -2677,10 +2677,16 @@ async function requestHandler(req, res) {
 
     if (pathname === '/api/edition-days') {
       if (req.method !== 'GET') return send405(res, 'GET');
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
       const limit = Math.max(1, Math.min(730, Number(url.searchParams.get('limit') || 120)));
-      const rows = pipeline.db.prepare('SELECT DISTINCT day FROM editions ORDER BY day DESC LIMIT ?;').all(limit);
+      const today = formatDay();
+      const rows = pipeline.db
+        .prepare('SELECT DISTINCT day FROM editions WHERE years_forward = ? AND day <= ? ORDER BY day DESC LIMIT ?;')
+        .all(yearsForward, today, limit);
       const days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
       sendJson(res, {
+        yearsForward,
+        today,
         days,
         latestDay: days[0] || null,
         oldestDay: days[days.length - 1] || null
