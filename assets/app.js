@@ -372,10 +372,7 @@
     }
 
     fetchEditionDaysMeta().then((meta) => {
-      const minDay = normalizeDay(meta.oldestDay || '');
       const maxDay = normalizeDay(meta.latestDay || '');
-      if (minDay) input.min = minDay;
-      if (maxDay) input.max = maxDay;
       if (!normalizeDay(input.value) && maxDay && !normalizeDay(getDayFromQuery())) {
         input.value = maxDay;
       }
