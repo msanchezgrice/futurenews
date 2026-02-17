@@ -2681,8 +2681,22 @@ async function requestHandler(req, res) {
       const limit = Math.max(1, Math.min(730, Number(url.searchParams.get('limit') || 120)));
       const today = formatDay();
       const rows = pipeline.db
-        .prepare('SELECT DISTINCT day FROM editions WHERE years_forward = ? AND day <= ? ORDER BY day DESC LIMIT ?;')
-        .all(yearsForward, today, limit);
+        .prepare(`
+          SELECT day
+          FROM (
+            SELECT day FROM editions WHERE years_forward = ? AND day <= ?
+            UNION
+            SELECT day FROM story_curations WHERE years_forward = ? AND day <= ?
+            UNION
+            SELECT day FROM day_curations WHERE day <= ?
+            UNION
+            SELECT day FROM day_signal_snapshots WHERE day <= ?
+          )
+          GROUP BY day
+          ORDER BY day DESC
+          LIMIT ?;
+        `)
+        .all(yearsForward, today, yearsForward, today, today, today, limit);
       const days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
       sendJson(res, {
         yearsForward,
