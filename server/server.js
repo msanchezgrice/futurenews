@@ -548,6 +548,61 @@ function ordinal(n) {
   return `${num}th`;
 }
 
+function compactText(value, maxLen = 240) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  return normalized.slice(0, maxLen).trim();
+}
+
+function sentence(value) {
+  const text = compactText(value, 500);
+  if (!text) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function formatSeries(items) {
+  const list = Array.from(new Set((items || []).map((item) => compactText(item, 90)).filter(Boolean)));
+  if (!list.length) return '';
+  if (list.length === 1) return list[0];
+  if (list.length === 2) return `${list[0]} and ${list[1]}`;
+  return `${list.slice(0, -1).join(', ')}, and ${list[list.length - 1]}`;
+}
+
+function buildFallbackForecastBody(story, curation) {
+  const pack = story?.evidencePack || {};
+  const editionDate = compactText(pack.editionDate || '', 60);
+  const section = compactText(story?.section || '', 40) || 'the edition';
+  const title = compactText(curation?.curatedTitle || curation?.draftArticle?.title || story?.headlineSeed || story?.title || '', 180);
+  const dek = compactText(curation?.curatedDek || curation?.draftArticle?.dek || story?.dekSeed || story?.dek || '', 240);
+  const topic = compactText(curation?.topicTitle || curation?.topicSeed || pack?.topic?.theme || pack?.topic?.label || '', 180);
+  const eventSeed = compactText(curation?.futureEventSeed || '', 260);
+  const sparkDirections = compactText(curation?.sparkDirections || '', 260);
+
+  const signalLabels = (Array.isArray(pack.signals) ? pack.signals : [])
+    .map((s) => s?.label || s?.title || s?.value || '')
+    .map((s) => compactText(s, 100))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const lead = sentence(
+    [title, dek].filter(Boolean).join('. ') ||
+      `${section} editors are treating this shift as a live story${editionDate ? ` for ${editionDate}` : ''}`
+  );
+  const context = sentence(
+    eventSeed ||
+      sparkDirections ||
+      (topic
+        ? `${topic} has moved from a background trend to a near-term operating reality for institutions`
+        : `officials say the change is now shaping policy, operations, and investment decisions`)
+  );
+  const evidence = signalLabels.length
+    ? `Current reporting points to ${formatSeries(signalLabels)} as the strongest baseline evidence behind this development`
+    : `${section} desks describe this as a concrete shift already unfolding${editionDate ? ` by ${editionDate}` : ''}`;
+  const close = sentence(evidence);
+
+  return [lead, context, close].filter(Boolean).join('\n\n').trim();
+}
+
 function buildForecastBody(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
@@ -557,9 +612,14 @@ function buildForecastBody(story) {
     return draftBody;
   }
 
-  // No full draft available. We do not render at request-time; unpublished stories
-  // stay unavailable until the next curated/pre-render pass.
-  return '';
+  const storyBody = String(story?.body || '').trim();
+  if (storyBody.length > 120) {
+    return storyBody;
+  }
+
+  // Guarantee a publishable baseline body so the front page does not collapse to
+  // "no stories" while curation/backfill jobs are still catching up.
+  return buildFallbackForecastBody(story, curation);
 }
 
 function buildSeedArticleFromStory(story) {
