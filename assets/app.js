@@ -9,7 +9,7 @@
   const ARTICLE_CACHE_KEY = 'future-times-article-cache-v17';
   const EDITION_TTL_MS = 1000 * 60 * 60;
   const ARTICLE_TTL_MS = 1000 * 60 * 20;
-  const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
+  const DEFAULT_FALLBACK_IMAGE = 'assets/img/humanoids-labor-market.svg';
   const topLoadingBar = document.getElementById('topLoadingBar');
   const topLoadingBarFill = topLoadingBar ? topLoadingBar.querySelector('.top-loading-bar-fill') : null;
 
@@ -37,10 +37,12 @@
   const prefetchedArticles = new Set();
   let topLoadingTicker = null;
   let editionAutoRefreshTimer = null;
+  let editionDaysMeta = null;
 
   const api = {
     edition: (years, day) => `/api/edition?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
-    articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`
+    articleStatus: (id, years, day) => `/api/article/${encodeURIComponent(id)}?years=${years}${day ? `&day=${encodeURIComponent(day)}` : ''}`,
+    editionDays: (limit = 365) => `/api/edition-days?limit=${encodeURIComponent(String(limit))}`
   };
 
   init();
@@ -52,6 +54,7 @@
     setDaySignalLink(day);
     attachArticleLinkNavigation();
     wireEditionControls(years);
+    wireEditionDayControls({ years, day });
     if (topLoadingBar) {
       topLoadingBar.classList.remove('is-active');
     }
@@ -160,23 +163,29 @@
     const raw = String(value || '').trim();
     if (!raw) return false;
     const lower = raw.toLowerCase();
-    for (const marker of BLOCKED_IMAGE_MARKERS) {
-      if (lower.includes(marker)) return false;
-    }
     if (lower.startsWith('http://') || lower.startsWith('https://')) {
-      if (lower.includes('.public.blob.vercel-storage.com/')) return true;
-      if (lower.includes('/assets/img/generated/')) return true;
-      if (lower.includes('/assets/img/library/')) return true;
+      try {
+        const parsed = new URL(raw, location.href);
+        if (parsed.hostname.endsWith('.public.blob.vercel-storage.com')) return true;
+        if (parsed.origin === location.origin && parsed.pathname.startsWith('/assets/img/')) return true;
+      } catch {
+        return false;
+      }
       return false;
     }
-    if (lower.startsWith('assets/img/generated/') || lower.startsWith('/assets/img/generated/')) return true;
-    if (lower.startsWith('assets/img/library/') || lower.startsWith('/assets/img/library/')) return true;
+    if (lower.startsWith('assets/img/') || lower.startsWith('/assets/img/')) return true;
     return false;
   }
 
   function sanitizeArticleImage(value) {
     const raw = String(value || '').trim();
     return isRenderableArticleImage(raw) ? raw : '';
+  }
+
+  function getArticleImageUrl(article) {
+    const preferred = sanitizeArticleImage(article && article.image);
+    if (preferred) return preferred;
+    return sanitizeArticleImage(DEFAULT_FALLBACK_IMAGE);
   }
 
   function getDayFromQuery() {
@@ -281,6 +290,98 @@
         location.href = getEditionUrlWithSection(newYears, section, day);
       }
     });
+  }
+
+  async function fetchEditionDaysMeta() {
+    if (editionDaysMeta) return editionDaysMeta;
+    try {
+      const payload = await fetchJSON(api.editionDays(365));
+      const days = Array.isArray(payload?.days)
+        ? payload.days.map((entry) => normalizeDay(entry)).filter(Boolean)
+        : [];
+      editionDaysMeta = {
+        days,
+        latestDay: normalizeDay(payload?.latestDay || days[0] || ''),
+        oldestDay: normalizeDay(payload?.oldestDay || days[days.length - 1] || '')
+      };
+    } catch {
+      editionDaysMeta = { days: [], latestDay: '', oldestDay: '' };
+    }
+    return editionDaysMeta;
+  }
+
+  function setEditionDayControlValue(day = '') {
+    const input = document.getElementById('editionDay');
+    if (!input) return;
+    const normalized = normalizeDay(day) || normalizeDay(state.day) || normalizeDay(getDayFromQuery()) || '';
+    if (input.value !== normalized) {
+      input.value = normalized;
+    }
+  }
+
+  function navigateToEditionDay(targetDay = '', options = {}) {
+    const desiredDay = normalizeDay(targetDay) || '';
+    const currentDay = normalizeDay(getDayFromQuery()) || '';
+    if (desiredDay === currentDay && !options.force) {
+      finishTopLoad();
+      return;
+    }
+
+    const years = clampYears(getYearsFromQuery());
+    const section = getSectionFromQuery();
+    const next = getEditionUrlWithSection(years, section, desiredDay);
+
+    if (pageIsIndex && (location.pathname.endsWith('/index.html') || location.pathname === '/' || location.pathname === '')) {
+      history.pushState({ page: 'index', years, section, day: desiredDay }, '', next);
+      renderIndex(years, { pushHistory: false, section, day: desiredDay });
+      return;
+    }
+
+    location.href = next;
+  }
+
+  function wireEditionDayControls({ years = DEFAULT_YEARS, day = '' } = {}) {
+    const input = document.getElementById('editionDay');
+    const latestBtn = document.getElementById('editionDayLatest');
+    if (!input) return;
+
+    setEditionDayControlValue(day);
+
+    if (!input.dataset.futurenewsBound) {
+      input.dataset.futurenewsBound = '1';
+      input.addEventListener('change', () => {
+        const selectedDay = normalizeDay(input.value) || '';
+        startTopLoad(12);
+        navigateToEditionDay(selectedDay);
+      });
+    }
+
+    if (latestBtn && !latestBtn.dataset.futurenewsBound) {
+      latestBtn.dataset.futurenewsBound = '1';
+      latestBtn.addEventListener('click', async () => {
+        startTopLoad(10);
+        const meta = await fetchEditionDaysMeta();
+        const latestDay = normalizeDay(meta.latestDay || '');
+        if (latestDay) {
+          input.value = latestDay;
+          navigateToEditionDay(latestDay, { force: true });
+          return;
+        }
+        finishTopLoad();
+      });
+    }
+
+    fetchEditionDaysMeta().then((meta) => {
+      const minDay = normalizeDay(meta.oldestDay || '');
+      const maxDay = normalizeDay(meta.latestDay || '');
+      if (minDay) input.min = minDay;
+      if (maxDay) input.max = maxDay;
+      if (!normalizeDay(input.value) && maxDay && !normalizeDay(getDayFromQuery())) {
+        input.value = maxDay;
+      }
+    }).catch(() => {});
+
+    setEditionBadge(years);
   }
 
   function wireSectionLink(link) {
@@ -571,6 +672,7 @@
       notes.textContent = signalDay ? `Signals captured: ${signalDay}` : '';
     }
     setDaySignalLink(payload.day || state.day || getDayFromQuery());
+    setEditionDayControlValue(payload.day || state.day || getDayFromQuery());
   }
 
   function updateEditionTagFromCache(cachedEdition) {
@@ -607,6 +709,8 @@
     state.day = day;
     setEditionBadge(clamped);
     wireEditionControls(clamped);
+    wireEditionDayControls({ years: clamped, day: state.day });
+    setEditionDayControlValue(day);
     setupSectionNav();
     navSetActiveSection(section);
 
@@ -625,6 +729,7 @@
         } else {
           state.day = resolvedDay || state.day;
         }
+        setEditionDayControlValue(state.day);
         updateEditionHeader(payload);
         updateSectionNavVisibility(payload);
         const heroId = renderHero(payload, clamped, section, state.day);
@@ -698,7 +803,7 @@
       setText('aSection', heroArticle.section || 'Future');
     }
 
-    const heroImageUrl = sanitizeArticleImage(heroArticle.image);
+    const heroImageUrl = getArticleImageUrl(heroArticle);
     if (heroImage && heroImageUrl) {
       heroImage.src = heroImageUrl;
       heroImage.alt = heroArticle.title || 'Lead story';
@@ -1146,7 +1251,7 @@
     }
 
     if (hero) {
-      const imageUrl = sanitizeArticleImage(article.image);
+      const imageUrl = getArticleImageUrl(article);
       if (imageUrl) {
         hero.src = imageUrl;
         hero.alt = article.title || 'Article hero';

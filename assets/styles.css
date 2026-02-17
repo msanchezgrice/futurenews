@@ -110,6 +110,7 @@ a {
   align-items: center;
   gap: 8px;
   margin-top: 10px;
+  flex-wrap: wrap;
 }
 
 .editionSelect {
@@ -128,6 +129,33 @@ a {
   background-position: calc(100% - 12px) 55%, calc(100% - 8px) 55%;
   background-size: 5px 6px, 5px 6px;
   background-repeat: no-repeat;
+}
+
+.dayPickerWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dayPicker {
+  border: 1px solid #111;
+  background: transparent;
+  border-radius: 0;
+  font-family: var(--font-sans);
+  color: #111;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 8px 10px;
+  min-width: 168px;
+}
+
+.dayPicker::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+.dayLatestBtn {
+  padding: 8px 10px;
+  min-height: 34px;
 }
 
 .pill,

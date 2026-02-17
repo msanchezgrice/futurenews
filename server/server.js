@@ -2520,6 +2520,19 @@ async function requestHandler(req, res) {
       return;
     }
 
+    if (pathname === '/api/edition-days') {
+      if (req.method !== 'GET') return send405(res, 'GET');
+      const limit = Math.max(1, Math.min(730, Number(url.searchParams.get('limit') || 120)));
+      const rows = pipeline.db.prepare('SELECT DISTINCT day FROM editions ORDER BY day DESC LIMIT ?;').all(limit);
+      const days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
+      sendJson(res, {
+        days,
+        latestDay: days[0] || null,
+        oldestDay: days[days.length - 1] || null
+      });
+      return;
+    }
+
     if (pathname === '/api/pipeline/sources') {
       if (req.method !== 'GET') return send405(res, 'GET');
       sendJson(res, { sources: pipeline.listSources() });
