@@ -841,17 +841,20 @@
     const meta = hero.querySelector('.meta');
     const heroMedia = document.getElementById('heroMedia');
 
-    const resetHero = () => {
+    const resetHero = ({ headlineText = '', dekText = '', metaText = '', badgeText = 'Edition' } = {}) => {
       if (heroLink) heroLink.href = '#';
-      if (sectionSpan) sectionSpan.textContent = 'Edition';
-      setTextElement(headline, 'No published lead story yet');
-      setTextElement(dek, 'Daily curation is still running for this day.');
-      setTextElement(meta, day ? `Day • ${day}` : '—');
+      if (sectionSpan) sectionSpan.textContent = badgeText;
+      setTextElement(headline, headlineText || 'No published lead story yet');
+      setTextElement(dek, dekText || 'No lead story is available right now.');
+      setTextElement(meta, metaText || (day ? `Day • ${day}` : '—'));
       if (heroMedia) heroMedia.style.display = 'none';
     };
 
     if (!payload || !payload.articles || !payload.articles.length) {
-      resetHero();
+      resetHero({
+        headlineText: 'No published lead story yet',
+        dekText: 'No published stories are available for this day yet.'
+      });
       return;
     }
 
@@ -860,6 +863,16 @@
       normalizedSection === SECTION_ALL
         ? payload.articles
         : payload.articles.filter((article) => (article.section || SECTION_ORDER[0]) === normalizedSection);
+
+    if (normalizedSection !== SECTION_ALL && !articlesInSection.length) {
+      resetHero({
+        headlineText: `No lead story in ${normalizedSection}`,
+        dekText: `No stories are available in ${normalizedSection} for this edition.`,
+        metaText: day ? `${normalizedSection} • ${day}` : normalizedSection,
+        badgeText: normalizedSection
+      });
+      return;
+    }
 
     const hasImage = (article) => Boolean(getArticleImageUrl(article));
     const heroArticle =
@@ -873,7 +886,15 @@
           null));
 
     if (!heroArticle) {
-      resetHero();
+      const imageSource = normalizedSection === SECTION_ALL ? payload.articles : articlesInSection;
+      const hasAnyImageCandidate = imageSource.some(hasImage);
+      resetHero({
+        headlineText: hasAnyImageCandidate ? 'Lead story is not available' : 'Lead story image pending',
+        dekText: hasAnyImageCandidate
+          ? 'No lead story with a final rendered hero image is available for this selection.'
+          : 'Lead stories require a final rendered hero image; none is available yet for this selection.',
+        badgeText: normalizedSection === SECTION_ALL ? 'Edition' : normalizedSection
+      });
       return;
     }
 
