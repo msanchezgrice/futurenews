@@ -35,6 +35,7 @@ const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
 const MIN_PUBLISHED_BODY_CHARS = Math.max(80, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 120));
+const EDITION_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_EDITION_RECOVERY_COOLDOWN_MS || 10 * 60 * 1000));
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -154,6 +155,7 @@ pipeline.init();
 const jobStore = new Map(); // key -> job
 const cacheByKey = new Map(); // storyId -> rendered article
 const socketToSubscriptions = new Map(); // socket -> Set<subscription>
+const editionRecoveryAttempts = new Map(); // day|years -> last attempt ms
 let activePort = null;
 
 startPipelineScheduler();
@@ -311,6 +313,64 @@ function prewarmRenderCacheForDay(day, yearsList = [EDITION_YEARS]) {
     missing,
     skippedNoBody
   };
+}
+
+async function buildPublishedEdition(day, yearsForward, payload) {
+  const decorate = async (editionPayload) => {
+    let decorated = editionPayload;
+    try {
+      decorated = await decorateEditionPayload(editionPayload, { day, yearsForward });
+    } catch {
+      // best-effort only
+    }
+    return filterEditionToPublishedArticles(decorated);
+  };
+
+  let published = await decorate(payload);
+  if ((published?.articles || []).length > 0) return published;
+
+  const recoveryKey = `${day}|y${yearsForward}`;
+  const nowMs = Date.now();
+  const lastAttemptMs = Number(editionRecoveryAttempts.get(recoveryKey) || 0);
+  if (lastAttemptMs && nowMs - lastAttemptMs < EDITION_RECOVERY_COOLDOWN_MS) {
+    return published;
+  }
+  editionRecoveryAttempts.set(recoveryKey, nowMs);
+
+  let firstResult = null;
+  try {
+    firstResult = await pipeline.curateDay(day, { force: false });
+  } catch {
+    // ignore and fall through
+  }
+  try {
+    prewarmRenderCacheForDay(day, [yearsForward]);
+  } catch {
+    // ignore
+  }
+
+  let refreshed = pipeline.getEdition(day, yearsForward);
+  if (refreshed) {
+    published = await decorate(refreshed);
+    if ((published?.articles || []).length > 0) return published;
+  }
+
+  // If curation was skipped because stale rows existed, force a one-time rebuild.
+  const skippedReason = String(firstResult?.reason || '');
+  if (skippedReason === 'story_curations_present' || skippedReason === 'already_curated') {
+    try {
+      await pipeline.curateDay(day, { force: true });
+      prewarmRenderCacheForDay(day, [yearsForward]);
+      refreshed = pipeline.getEdition(day, yearsForward);
+      if (refreshed) {
+        published = await decorate(refreshed);
+      }
+    } catch {
+      // keep original published payload
+    }
+  }
+
+  return published;
 }
 
 function splitToChunks(text, size) {
@@ -3153,13 +3213,8 @@ async function requestHandler(req, res) {
         sendJson(res, { error: 'edition_not_found', day: builtDay, years }, 404);
         return;
       }
-      let decorated = payload;
-      try {
-        decorated = await decorateEditionPayload(payload, { day: builtDay, yearsForward: years });
-      } catch {
-        // best-effort: never break newspaper
-      }
-      sendJson(res, filterEditionToPublishedArticles(decorated));
+      const published = await buildPublishedEdition(builtDay, years, payload);
+      sendJson(res, published);
       return;
     }
 

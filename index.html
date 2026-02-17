@@ -39,15 +39,15 @@
         <div id="hero" class="card hero">
           <div class="content">
           <div class="kicker"><span class="dot"></span><span>LEAD STORY</span></div>
-            <a id="heroLink" href="article.html?id=humanoids-labor-market&years=5" class="article-link" style="display:block">
+            <a id="heroLink" href="#" class="article-link" style="display:block">
               <div class="badge"><span class="spark">✦</span><strong>Robotics</strong><span style="color:var(--muted)">Edition</span></div>
               <h2 class="headline">—</h2>
               <p class="dek">—</p>
               <div class="meta">—</div>
             </a>
           </div>
-          <div class="media">
-            <img src="assets/img/humanoids-labor-market.svg" alt="Hero"/>
+          <div class="media" id="heroMedia" style="display:none">
+            <img id="heroImg" src="" alt="Hero"/>
           </div>
         </div>
 
@@ -57,7 +57,7 @@
         </div>
 
         <div class="card footer-note" style="margin-top:18px">
-          <strong>Context:</strong> A future-dated front page generated daily from public signals, with full articles rendered live when you click.<br/>
+          <strong>Context:</strong> A future-dated front page generated daily from public signals, with articles published after curation and pre-rendering.<br/>
           <span id="notes"></span>
           <div class="small" style="margin-top:10px">
             <a id="daySignalLink" href="/api/day-signal?format=html" target="_blank" rel="noopener">View this edition’s signal pack (inputs + evidence)</a>

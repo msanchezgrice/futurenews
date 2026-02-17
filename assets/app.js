@@ -651,8 +651,21 @@
     const headline = hero.querySelector('.headline');
     const dek = hero.querySelector('.dek');
     const meta = hero.querySelector('.meta');
+    const heroMedia = document.getElementById('heroMedia');
 
-    if (!payload || !payload.articles || !payload.articles.length) return;
+    const resetHero = () => {
+      if (heroLink) heroLink.href = '#';
+      if (sectionSpan) sectionSpan.textContent = 'Edition';
+      setTextElement(headline, 'No published lead story yet');
+      setTextElement(dek, 'Daily curation is still running for this day.');
+      setTextElement(meta, day ? `Day • ${day}` : '—');
+      if (heroMedia) heroMedia.style.display = 'none';
+    };
+
+    if (!payload || !payload.articles || !payload.articles.length) {
+      resetHero();
+      return;
+    }
 
     const normalizedSection = normalizeSection(section);
     const articlesInSection =
@@ -667,7 +680,10 @@
       payload.articles[0] ||
       null;
 
-    if (!heroArticle) return;
+    if (!heroArticle) {
+      resetHero();
+      return;
+    }
 
     if (heroLink) {
       heroLink.href = getArticleUrl(heroArticle.id, years, day);
@@ -682,7 +698,6 @@
       setText('aSection', heroArticle.section || 'Future');
     }
 
-    const heroMedia = document.getElementById('heroMedia');
     const heroImageUrl = sanitizeArticleImage(heroArticle.image);
     if (heroImage && heroImageUrl) {
       heroImage.src = heroImageUrl;
