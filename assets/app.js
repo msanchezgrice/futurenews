@@ -701,11 +701,15 @@
 
   function filterCuratedArticles(payload) {
     if (!payload || !Array.isArray(payload.articles)) return payload;
-    const before = payload.articles.length;
     payload.articles = payload.articles.filter((a) => {
       const conf = Number(a.confidence) || Number(a.curation?.confidence) || 0;
       const hasBody = (a.body || '').trim().length > 50;
-      return conf > 0 || hasBody;
+      const title = String(a.title || '').trim();
+      const dek = String(a.dek || '').trim();
+      const hasHeadline = title.length >= 10;
+      const hasDek = dek.length >= 18;
+      // Keep publishable headline/dek stories even when confidence/body arrive later.
+      return (conf > 0 || hasBody || (hasHeadline && hasDek));
     });
     return payload;
   }
