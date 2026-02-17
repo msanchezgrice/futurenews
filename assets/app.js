@@ -9,7 +9,7 @@
   const ARTICLE_CACHE_KEY = 'future-times-article-cache-v17';
   const EDITION_TTL_MS = 1000 * 60 * 60;
   const ARTICLE_TTL_MS = 1000 * 60 * 20;
-  const DEFAULT_FALLBACK_IMAGE = 'assets/img/humanoids-labor-market.svg';
+  const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
   const topLoadingBar = document.getElementById('topLoadingBar');
   const topLoadingBarFill = topLoadingBar ? topLoadingBar.querySelector('.top-loading-bar-fill') : null;
 
@@ -163,17 +163,22 @@
     const raw = String(value || '').trim();
     if (!raw) return false;
     const lower = raw.toLowerCase();
+    for (const marker of BLOCKED_IMAGE_MARKERS) {
+      if (lower.includes(marker)) return false;
+    }
     if (lower.startsWith('http://') || lower.startsWith('https://')) {
       try {
         const parsed = new URL(raw, location.href);
         if (parsed.hostname.endsWith('.public.blob.vercel-storage.com')) return true;
-        if (parsed.origin === location.origin && parsed.pathname.startsWith('/assets/img/')) return true;
+        if (parsed.origin === location.origin && parsed.pathname.startsWith('/assets/img/generated/')) return true;
+        if (parsed.origin === location.origin && parsed.pathname.startsWith('/assets/img/library/')) return true;
       } catch {
         return false;
       }
       return false;
     }
-    if (lower.startsWith('assets/img/') || lower.startsWith('/assets/img/')) return true;
+    if (lower.startsWith('assets/img/generated/') || lower.startsWith('/assets/img/generated/')) return true;
+    if (lower.startsWith('assets/img/library/') || lower.startsWith('/assets/img/library/')) return true;
     return false;
   }
 
@@ -183,9 +188,7 @@
   }
 
   function getArticleImageUrl(article) {
-    const preferred = sanitizeArticleImage(article && article.image);
-    if (preferred) return preferred;
-    return sanitizeArticleImage(DEFAULT_FALLBACK_IMAGE);
+    return sanitizeArticleImage(article && article.image);
   }
 
   function getDayFromQuery() {
@@ -775,12 +778,16 @@
         ? payload.articles
         : payload.articles.filter((article) => (article.section || SECTION_ORDER[0]) === normalizedSection);
 
+    const hasImage = (article) => Boolean(getArticleImageUrl(article));
     const heroArticle =
       (normalizedSection !== SECTION_ALL
-        ? articlesInSection[0]
-        : payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id))) ||
-      payload.articles[0] ||
-      null;
+        ? (articlesInSection.find(hasImage) ||
+          payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id) && hasImage(article)) ||
+          payload.articles.find(hasImage) ||
+          null)
+        : (payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id) && hasImage(article)) ||
+          payload.articles.find(hasImage) ||
+          null));
 
     if (!heroArticle) {
       resetHero();

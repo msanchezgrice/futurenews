@@ -36,6 +36,10 @@ const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
 const MIN_PUBLISHED_BODY_CHARS = Math.max(80, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 120));
 const EDITION_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_EDITION_RECOVERY_COOLDOWN_MS || 10 * 60 * 1000));
+const HERO_IMAGE_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_COOLDOWN_MS || 15 * 60 * 1000));
+const HERO_IMAGE_RECOVERY_MAX_MS = Math.max(10_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_MAX_MS || 30_000));
+const HERO_IMAGE_RECOVERY_LIMIT = Math.max(1, Number(process.env.FT_HERO_IMAGE_RECOVERY_LIMIT || 4));
+const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
 
 // ── Admin auth ──
 // Check env, then runtime config
@@ -156,6 +160,7 @@ const jobStore = new Map(); // key -> job
 const cacheByKey = new Map(); // storyId -> rendered article
 const socketToSubscriptions = new Map(); // socket -> Set<subscription>
 const editionRecoveryAttempts = new Map(); // day|years -> last attempt ms
+const heroImageRecoveryAttempts = new Map(); // day|years -> last attempt ms
 let activePort = null;
 
 startPipelineScheduler();
@@ -205,6 +210,90 @@ function isPublishReadyArticle(article) {
   return hasRenderableBody(article, MIN_PUBLISHED_BODY_CHARS) && hasPublishableHeadlineAndDek(article);
 }
 
+function extractYears(text) {
+  const out = [];
+  const matches = String(text || '').match(/\b(19|20)\d{2}\b/g) || [];
+  for (const token of matches) {
+    const year = Number(token);
+    if (!Number.isFinite(year)) continue;
+    if (year < 1900 || year > 2100) continue;
+    out.push(year);
+  }
+  return out;
+}
+
+function resolveTargetYear(story, day, yearsForward) {
+  const baselineDay = normalizeDay(story?.day || day || '');
+  const baselineYear = Number(String(baselineDay || '').slice(0, 4));
+  const offset = Number(story?.yearsForward ?? yearsForward);
+  if (!Number.isFinite(baselineYear) || !Number.isFinite(offset)) return null;
+  return baselineYear + offset;
+}
+
+function isLegacyYearTitle(title, targetYear) {
+  if (!Number.isFinite(targetYear)) return false;
+  const years = extractYears(title);
+  if (!years.length) return false;
+  if (years.includes(targetYear)) return false;
+  return years.some((year) => year < targetYear);
+}
+
+function looksLikeLowFidelityFutureHeadline(title, targetYear) {
+  const t = String(title || '').trim();
+  if (!t) return true;
+  const lower = t.toLowerCase();
+  if (/^share\b/.test(lower)) return true;
+  if (/^readers?\b/.test(lower)) return true;
+  if (/^\s*['"“‘].+['"”’]\s+in\s+\d{4}\s*$/i.test(t)) return true;
+  if (Number.isFinite(targetYear) && new RegExp(`\\bin\\s+${targetYear}\\s*$`, 'i').test(t)) {
+    const wordCount = t.split(/\s+/).filter(Boolean).length;
+    if (wordCount <= 8) return true;
+  }
+  return false;
+}
+
+function isFutureAlignedStory({ id, title, dek }, story, { day, yearsForward }) {
+  const safeTitle = String(title || '').trim();
+  if (!safeTitle) return false;
+
+  const targetYear = resolveTargetYear(story, day, yearsForward);
+  if (isLegacyYearTitle(safeTitle, targetYear)) return false;
+  if (looksLikeLowFidelityFutureHeadline(safeTitle, targetYear)) return false;
+
+  const sid = String(id || '').toLowerCase();
+  if (/(share-your|readers-on|review)/.test(sid)) {
+    const merged = `${safeTitle} ${String(dek || '')}`;
+    if (!extractYears(merged).includes(Number(targetYear))) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isFinalRenderedImage(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+  for (const marker of BLOCKED_IMAGE_MARKERS) {
+    if (lower.includes(marker)) return false;
+  }
+  if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    if (lower.includes('.public.blob.vercel-storage.com/')) return true;
+    if (lower.includes('/assets/img/generated/')) return true;
+    if (lower.includes('/assets/img/library/')) return true;
+    return false;
+  }
+  if (lower.startsWith('assets/img/generated/') || lower.startsWith('/assets/img/generated/')) return true;
+  if (lower.startsWith('assets/img/library/') || lower.startsWith('/assets/img/library/')) return true;
+  return false;
+}
+
+function sanitizeFinalImage(value) {
+  const raw = String(value || '').trim();
+  return isFinalRenderedImage(raw) ? raw : '';
+}
+
 function getPreRenderedArticle(storyId, story = null) {
   const key = keyFor(storyId, story);
   const mem = cacheByKey.get(key);
@@ -226,7 +315,9 @@ function getPreRenderedArticle(storyId, story = null) {
   return null;
 }
 
-function filterEditionToPublishedArticles(payload) {
+function filterEditionToPublishedArticles(payload, options = {}) {
+  const day = normalizeDay(options.day || '');
+  const yearsForward = Number(options.yearsForward);
   const base = payload && typeof payload === 'object' ? payload : null;
   if (!base) return payload;
   const articles = Array.isArray(base.articles) ? base.articles : [];
@@ -239,12 +330,18 @@ function filterEditionToPublishedArticles(payload) {
     const story = pipeline.getStory(id);
     const rendered = getPreRenderedArticle(id, story);
     if (!rendered) continue;
+    const mergedTitle = String(rendered.title || article.title || '').trim();
+    const mergedDek = String(rendered.dek || article.dek || '').trim();
+    if (!isFutureAlignedStory({ id, title: mergedTitle, dek: mergedDek }, story, { day, yearsForward })) {
+      continue;
+    }
+    const mergedImage = sanitizeFinalImage(rendered.image || article.image || '');
     filtered.push({
       ...article,
-      title: String(rendered.title || article.title || '').trim(),
-      dek: String(rendered.dek || article.dek || '').trim(),
+      title: mergedTitle,
+      dek: mergedDek,
       meta: String(rendered.meta || article.meta || '').trim(),
-      image: String(rendered.image || article.image || '').trim(),
+      image: mergedImage,
       confidence: Number.isFinite(Number(rendered.confidence))
         ? Math.max(0, Math.min(100, Math.round(Number(rendered.confidence))))
         : Number.isFinite(Number(article?.confidence))
@@ -253,11 +350,18 @@ function filterEditionToPublishedArticles(payload) {
     });
   }
 
+  const withImageIds = new Set(
+    filtered
+      .filter((entry) => isFinalRenderedImage(entry.image))
+      .map((entry) => String(entry.id || '').trim())
+      .filter(Boolean)
+  );
+
   const currentHeroId = String(base.heroId || base.heroStoryId || '').trim();
   const resolvedHeroId =
-    (currentHeroId && filtered.some((entry) => String(entry.id || '') === currentHeroId))
+    (currentHeroId && withImageIds.has(currentHeroId))
       ? currentHeroId
-      : (filtered[0]?.id || null);
+      : (filtered.find((entry) => withImageIds.has(String(entry.id || '').trim()))?.id || null);
 
   return {
     ...base,
@@ -315,6 +419,47 @@ function prewarmRenderCacheForDay(day, yearsList = [EDITION_YEARS]) {
   };
 }
 
+function hasHeroWithFinalImage(payload) {
+  const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+  if (!articles.length) return false;
+  const heroId = String(payload?.heroId || payload?.heroStoryId || '').trim();
+  if (!heroId) return false;
+  const hero = articles.find((entry) => String(entry?.id || '').trim() === heroId);
+  return Boolean(hero && isFinalRenderedImage(hero.image));
+}
+
+async function recoverHeroImages(day, yearsForward) {
+  const flags = getFutureImagesFlags();
+  if (!flags.imagesEnabled || !flags.storyHeroEnabled) return { ok: false, skipped: true, reason: 'images_disabled' };
+  if (Number(yearsForward) !== 5) return { ok: false, skipped: true, reason: 'unsupported_years_forward' };
+
+  const key = `${day}|y${yearsForward}`;
+  const nowMs = Date.now();
+  const lastAttemptMs = Number(heroImageRecoveryAttempts.get(key) || 0);
+  if (lastAttemptMs && nowMs - lastAttemptMs < HERO_IMAGE_RECOVERY_COOLDOWN_MS) {
+    return { ok: false, skipped: true, reason: 'cooldown' };
+  }
+  heroImageRecoveryAttempts.set(key, nowMs);
+
+  try {
+    const enqueue = await enqueueSectionHeroJobs({
+      day,
+      pipeline,
+      yearsForward,
+      force: false,
+      includeGlobalHero: true
+    });
+    const worker = await runImageWorker({
+      day,
+      limit: HERO_IMAGE_RECOVERY_LIMIT,
+      maxMs: HERO_IMAGE_RECOVERY_MAX_MS
+    });
+    return { ok: true, enqueue, worker };
+  } catch (err) {
+    return { ok: false, skipped: true, reason: String(err?.message || err) };
+  }
+}
+
 async function buildPublishedEdition(day, yearsForward, payload) {
   const decorate = async (editionPayload) => {
     let decorated = editionPayload;
@@ -323,7 +468,7 @@ async function buildPublishedEdition(day, yearsForward, payload) {
     } catch {
       // best-effort only
     }
-    return filterEditionToPublishedArticles(decorated);
+    return filterEditionToPublishedArticles(decorated, { day, yearsForward });
   };
 
   let published = await decorate(payload);
@@ -367,6 +512,14 @@ async function buildPublishedEdition(day, yearsForward, payload) {
       }
     } catch {
       // keep original published payload
+    }
+  }
+
+  if (!hasHeroWithFinalImage(published)) {
+    await recoverHeroImages(day, yearsForward);
+    const rehydrated = pipeline.getEdition(day, yearsForward);
+    if (rehydrated) {
+      published = await decorate(rehydrated);
     }
   }
 
