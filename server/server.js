@@ -244,10 +244,12 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
   const lower = t.toLowerCase();
   if (/^share\b/.test(lower)) return true;
   if (/^readers?\b/.test(lower)) return true;
+  if (/^what(?:'s| is)\s+the state of\b/i.test(t)) return true;
+  if (/\bhas died\b/i.test(t)) return true;
+  if (/\bhas had\b.+\bin\s+\d{4}\s*$/i.test(t)) return true;
   if (/^\s*['"“‘].+['"”’]\s+in\s+\d{4}\s*$/i.test(t)) return true;
   if (Number.isFinite(targetYear) && new RegExp(`\\bin\\s+${targetYear}\\s*$`, 'i').test(t)) {
-    const wordCount = t.split(/\s+/).filter(Boolean).length;
-    if (wordCount <= 8) return true;
+    if (!new RegExp(`^\\s*${targetYear}\\s*:`, 'i').test(t)) return true;
   }
   return false;
 }
