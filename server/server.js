@@ -12,7 +12,7 @@ import { SECTION_ORDER, clampYears, formatDay, normalizeDay } from './pipeline/u
 import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
 import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
 import { decorateArticlePayload, decorateEditionPayload } from './future_images/decorators.js';
-import { getFutureImagesFlags } from './future_images/config.js';
+import { getFutureImagesFlags, hasBlobConfig, hasPostgresConfig } from './future_images/config.js';
 import { refreshIdeas } from './future_images/ideas.js';
 import { enqueueSectionHeroJobs, enqueueSingleIdeaJob, enqueueSingleStoryHeroJob, runImageWorker } from './future_images/jobs.js';
 import { getImagesAdminState } from './future_images/state.js';
@@ -483,7 +483,9 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       rendered?.confidence,
       clampConfidence(articleInput?.confidence, clampConfidence(story?.curation?.confidence, 0))
     );
-    const mergedImage = sanitizeFinalImage(rendered?.image || articleInput?.image || '');
+    const renderedImage = sanitizeFinalImage(rendered?.image || '');
+    const articleImage = sanitizeFinalImage(articleInput?.image || '');
+    const mergedImage = renderedImage || articleImage || '';
 
     return {
       ...articleInput,
@@ -2873,6 +2875,7 @@ async function requestHandler(req, res) {
 	      if (req.method !== 'GET') return send405(res, 'GET');
 	      const curatorConfig = getOpusCurationConfigFromEnv();
 	      const emailConfig = getDailyEmailConfig();
+        const imageFlags = getFutureImagesFlags();
 	      sendJson(res, {
 	        provider: {
 	          mode: 'anthropic',
@@ -2895,6 +2898,11 @@ async function requestHandler(req, res) {
 	          configured: Boolean(emailConfig.apiKey && emailConfig.from && emailConfig.to.length),
 	          recipients: emailConfig.to.length
 	        },
+          images: {
+            flags: imageFlags,
+            postgresConfigured: hasPostgresConfig(),
+            blobConfigured: hasBlobConfig()
+          },
 	        server: { host: DEFAULT_HOST, port: activePort }
 	      });
 	      return;
