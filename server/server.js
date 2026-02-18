@@ -463,16 +463,16 @@ function selectBalancedPublishedStories(candidates, options = {}) {
 function getPreRenderedArticle(storyId, story = null) {
   const key = keyFor(storyId, story);
   const mem = cacheByKey.get(key);
-  if (mem && isPublishReadyArticle(mem)) return mem;
+  if (mem && isPublishReadyArticle(mem) && isStoryFuturePublishable(story || pipeline.getStory(storyId), mem)) return mem;
   const dbCached = pipeline.getRenderedVariant(storyId, { curationGeneratedAt: story?.curation?.generatedAt || '' });
-  if (dbCached && isPublishReadyArticle(dbCached)) {
+  if (dbCached && isPublishReadyArticle(dbCached) && isStoryFuturePublishable(story || pipeline.getStory(storyId), dbCached)) {
     cacheByKey.set(key, dbCached);
     return dbCached;
   }
   const resolvedStory = story || pipeline.getStory(storyId);
   if (resolvedStory) {
     const seedArticle = buildSeedArticleFromStory(resolvedStory);
-    if (isPublishReadyArticle(seedArticle)) {
+    if (isPublishReadyArticle(seedArticle) && isStoryFuturePublishable(resolvedStory, seedArticle)) {
       pipeline.storeRendered(storyId, seedArticle, { curationGeneratedAt: resolvedStory?.curation?.generatedAt || null });
       cacheByKey.set(key, seedArticle);
       return seedArticle;
@@ -511,9 +511,6 @@ function filterEditionToPublishedArticles(payload, options = {}) {
     const rawTitle = String(rendered?.title || articleInput?.title || story?.headlineSeed || '').trim();
     const rawDek = String(rendered?.dek || articleInput?.dek || story?.dekSeed || '').trim();
     const strict = Boolean(rendered && isFutureAlignedStory({ id, title: rawTitle, dek: rawDek }, story, { day: resolvedDay, yearsForward: resolvedYears }));
-    if (rendered && !strict) {
-      return null;
-    }
 
     let title = rawTitle;
     let dek = rawDek;
@@ -1158,8 +1155,19 @@ function buildSeedArticleFromStory(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
   const editionDate = pack.editionDate || '';
-  const title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || story.title || '';
-  const dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || story.dek || '';
+  let title = curation?.curatedTitle || curation?.draftArticle?.title || story.headlineSeed || story.title || '';
+  let dek = curation?.curatedDek || curation?.draftArticle?.dek || story.dekSeed || story.dek || '';
+  const targetYear = resolveTargetYear(story, story?.day || '', story?.yearsForward || EDITION_YEARS);
+  if (!isFutureAlignedStory({ id: story.storyId, title, dek }, story, { day: story?.day || '', yearsForward: story?.yearsForward || EDITION_YEARS })) {
+    const fallback = buildFutureFallbackCopy(story, { section: story.section, title, dek }, targetYear);
+    title = String(fallback.title || title).trim();
+    dek = String(fallback.dek || dek).trim();
+  }
+  if (!isFutureAlignedStory({ id: story.storyId, title, dek }, story, { day: story?.day || '', yearsForward: story?.yearsForward || EDITION_YEARS })) {
+    const safeSection = String(story?.section || 'Edition').trim() || 'Edition';
+    title = `${Number.isFinite(targetYear) ? `${targetYear}:` : 'Future:'} ${safeSection} Update`;
+    dek = `By ${editionDate || (Number.isFinite(targetYear) ? targetYear : 'the target edition')}, ${safeSection.toLowerCase()} developments become a defining storyline.`;
+  }
   const meta = editionDate ? `${story.section} • ${editionDate}` : String(story.section || '').trim();
   const body = buildForecastBody(story);
   const confidence = Number(curation?.confidence) || 0;
