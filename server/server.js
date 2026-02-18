@@ -27,7 +27,7 @@ const PORT_START = Number(process.env.PORT || 57965);
 const PORT_FALLBACK_STEP = Number(process.env.PORT_FALLBACK_STEP || 53);
 const PORT_MAX_TRIES = Number(process.env.PORT_MAX_TRIES || 48);
 
-// Articles are rendered by Anthropic Sonnet API — no Spark/mock renderers
+// Articles are rendered by Anthropic Opus API — no Spark/mock renderers
 const EDITION_YEARS = 5; // Only +5y edition for now
 
 const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 * 60);
@@ -1263,7 +1263,7 @@ function buildFallbackForecastBody(story, curation) {
 function buildForecastBody(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
-  // If Opus/Sonnet curated a full draft article, use it directly
+  // If Opus curated a full draft article, use it directly
   const draftBody = curation?.draftArticle?.body || curation?.draftBody || '';
   if (draftBody && draftBody.length > 120) {
     return draftBody;
@@ -1328,10 +1328,10 @@ async function runAnthropicRenderer(job, story, seedArticle) {
 
   const userPrompt = buildArticlePrompt(seedArticle, story);
 
-  broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
+  broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Opus...', percent: 15 });
 
-  // Story writing is Sonnet-only.
-  const model = 'claude-sonnet-4-5-20250929';
+  // Story writing is Opus-only.
+  const model = 'claude-opus-4-6';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -1542,7 +1542,7 @@ async function renderArticleContent(job, story, seedArticle) {
     return;
   }
 
-  // Use Anthropic Sonnet API to generate the article
+  // Use Anthropic Opus API to generate the article
   await runAnthropicRenderer(job, story, seedArticle);
 }
 
@@ -3160,7 +3160,7 @@ async function requestHandler(req, res) {
 	      sendJson(res, {
 	        provider: {
 	          mode: 'anthropic',
-	          articleModel: 'claude-sonnet-4-5-20250929'
+	          articleModel: 'claude-opus-4-6'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),

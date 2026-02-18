@@ -26,8 +26,8 @@ export function getOpusCurationConfigFromEnv() {
   const hasKey = Boolean(apiKeyEnv || apiKeyStored);
   const requestedMode = normalizeMode(modeRaw || 'anthropic');
   const mode = 'anthropic';
-  // Story writing is Sonnet-only.
-  const model = 'claude-sonnet-4-5-20250929';
+  // Story writing is Opus-only.
+  const model = 'claude-opus-4-6';
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
@@ -41,7 +41,7 @@ export function getOpusCurationConfigFromEnv() {
     String(process.env.OPUS_SYSTEM_PROMPT || stored.systemPrompt || '').trim() || DEFAULT_OPUS_SYSTEM_PROMPT;
 
   return {
-    mode, // Sonnet-only via Anthropic
+    mode, // Opus-only via Anthropic
     model,
     keyStoriesPerEdition,
     maxTokens,
@@ -282,7 +282,7 @@ function resolveAnthropicModelAlias(model) {
   if (!raw) return 'claude-opus-4-6';
 
   // If the user typed the exact API model name, pass it through unchanged.
-  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-sonnet-') || lower.startsWith('claude-haiku-')) {
+  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-haiku-')) {
     return raw;
   }
 
@@ -290,13 +290,10 @@ function resolveAnthropicModelAlias(model) {
   if (lower === 'opus-4.6' || lower === 'opus' || lower === 'opus-4' || lower.startsWith('opus-')) {
     return 'claude-opus-4-6';
   }
-  if (lower === 'sonnet' || lower.startsWith('sonnet')) {
-    return 'claude-sonnet-4-5-20250929';
-  }
   if (lower === 'haiku' || lower.startsWith('haiku')) {
     return 'claude-haiku-4-5-20251001';
   }
-  return raw;
+  return 'claude-opus-4-6';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -333,12 +330,9 @@ async function callAnthropicJson(prompt, config) {
 
   const requested = String(config.model || '').trim();
   const resolved = resolveAnthropicModelAlias(requested);
-  // Use Sonnet first for speed (full article generation for all stories needs fast model)
-  // Then fall back to Opus, then Haiku
+  // Use Opus first, then fall back to Haiku.
   const modelsToTry = uniqueStrings([
     resolved,
-    requested,
-    'claude-sonnet-4-5-20250929',
     'claude-opus-4-6',
     'claude-haiku-4-5-20251001'
   ]);
@@ -483,16 +477,16 @@ export async function generateEditionCurationPlan(input) {
   const config = input?.config || getOpusCurationConfigFromEnv();
   const mode = normalizeMode(config.mode);
   if (mode === 'off' || mode === 'disabled') {
-    throw new Error('Curation is Sonnet-only. OPUS_MODE cannot be off/disabled.');
+    throw new Error('Curation is Opus-only. OPUS_MODE cannot be off/disabled.');
   }
 
   const keyCount = clampInt(input?.keyCount ?? config.keyStoriesPerEdition, 1, 0, 7);
   if (mode !== 'anthropic') {
-    throw new Error(`OPUS_MODE="${mode}" is not allowed. Story writing is Sonnet-only via Anthropic.`);
+    throw new Error(`OPUS_MODE="${mode}" is not allowed. Story writing is Opus-only via Anthropic.`);
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
-  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-sonnet-4-5-20250929' });
+  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-opus-4-6' });
   if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
   return parsed;
 }
@@ -617,7 +611,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
       ...config,
       maxTokens: Math.min(config.maxTokens, 24000),
       timeoutMs: isVercel ? 120000 : 240000,
-      model: 'claude-sonnet-4-5-20250929'
+      model: 'claude-opus-4-6'
     };
 
     try {

@@ -43,16 +43,15 @@ export function getIdeasModelCandidates() {
   return [
     primary,
     'claude-opus-4-6',
-    'claude-sonnet-4-5-20250929',
     'claude-haiku-4-5-20251001'
   ].filter(Boolean);
 }
 
 export function getPromptModelCandidates() {
-  const primary = String(process.env.IMAGE_PROMPT_MODEL || 'claude-sonnet-4-5-20250929').trim();
+  const primary = String(process.env.IMAGE_PROMPT_MODEL || 'claude-opus-4-6').trim();
   return [
     primary,
-    'claude-sonnet-4-5-20250929',
+    'claude-opus-4-6',
     'claude-haiku-4-5-20251001'
   ].filter(Boolean);
 }

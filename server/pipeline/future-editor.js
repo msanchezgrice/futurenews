@@ -39,11 +39,12 @@ function resolveAnthropicModelAlias(model) {
   const raw = String(model || '').trim();
   const lower = raw.toLowerCase();
   if (!raw) return 'claude-opus-4-6';
-  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-sonnet-') || lower.startsWith('claude-haiku-')) {
+  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-haiku-')) {
     return raw;
   }
   if (lower === 'opus-4.6' || lower === 'opus' || lower.startsWith('opus-')) return 'claude-opus-4-6';
-  return raw;
+  if (lower === 'haiku' || lower.startsWith('haiku')) return 'claude-haiku-4-5-20251001';
+  return 'claude-opus-4-6';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -81,7 +82,7 @@ async function callAnthropicJson(prompt, config) {
 
   const requested = String(config?.model || '').trim();
   const resolved = resolveAnthropicModelAlias(requested || 'claude-opus-4-6');
-  const modelsToTry = [resolved, 'claude-opus-4-6', 'claude-sonnet-4-5-20250929'].filter(Boolean);
+  const modelsToTry = [resolved, 'claude-opus-4-6', 'claude-haiku-4-5-20251001'].filter(Boolean);
   const maxTokens = Math.max(2000, Math.min(32000, Number(config?.maxTokens) || 18000));
   const timeoutMs = Math.max(20000, Math.min(300000, Number(config?.timeoutMs) || 180000));
   const systemPrompt = String(config?.systemPrompt || '').trim() || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT;

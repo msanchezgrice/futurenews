@@ -2280,7 +2280,7 @@ export class FutureTimesPipeline {
               citations: Array.isArray(pack.citations) ? pack.citations : [],
               stats: { econ: pack.econ || {}, markets: pack.markets || [] },
               editionDate,
-              generatedFrom: `sonnet-backfill / ${normalized}`,
+              generatedFrom: `opus-backfill / ${normalized}`,
               generatedAt: isoNow(),
               curationGeneratedAt: generatedAt,
               yearsForward
