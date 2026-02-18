@@ -257,11 +257,15 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
   const t = String(title || '').trim();
   if (!t) return true;
   const lower = t.toLowerCase();
+  const yearPrefixed = /^\d{4}:\s*/.test(t);
+  const tail = t.replace(/^\d{4}:\s*/, '').trim();
+  const wordCount = tail ? tail.split(/\s+/).filter(Boolean).length : 0;
   if (/^share\b/.test(lower)) return true;
   if (/^readers?\b/.test(lower)) return true;
   if (/^how\s+/.test(lower)) return true;
   if (/^the\s+future\s+of\s+/.test(lower)) return true;
   if (/^\d+\s+years?\s+after\b/.test(lower)) return true;
+  if (yearPrefixed && wordCount > 0 && wordCount <= 3) return true;
   if (/^\d{4}:\s*(the labor market|arts and culture|business and finance|world affairs|technology and innovation|ai and automation|lifestyle and society|public opinion|u\.s\.\s*outlook|us outlook)\s*$/i.test(t)) return true;
   if (/^what(?:'s| is)\s+the state of\b/i.test(t)) return true;
   if (/\bhas died\b/i.test(t)) return true;
@@ -364,12 +368,24 @@ function normalizePhrase(value, maxLen = 120) {
   if (!raw) return '';
   const cleaned = raw
     .replace(/^a\s+\d{4}\s+report\s+on\s+/i, '')
+    .replace(/^by\s+[a-z]+\s+\d{1,2},\s+\d{4},\s*/i, '')
     .replace(/\bin\s+\d{4}\s*$/i, '')
     .replace(/^share\s+/i, '')
     .replace(/^readers?\s+on\s+/i, '')
     .trim();
   const candidate = cleaned || raw;
   return candidate.length > maxLen ? candidate.slice(0, maxLen).trim() : candidate;
+}
+
+function toHeadlineCase(value) {
+  const words = String(value || '').split(/\s+/).filter(Boolean);
+  if (!words.length) return '';
+  return words.map((word) => {
+    const lower = word.toLowerCase();
+    if (/^[A-Z]{2,}$/.test(word)) return word;
+    if (/^[a-z]{1,3}$/.test(lower) && !['ai', 'uk', 'us', 'eu', 'nhs'].includes(lower)) return lower;
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  }).join(' ');
 }
 
 function buildFutureFallbackCopy(story, article, targetYear) {
@@ -383,7 +399,8 @@ function buildFutureFallbackCopy(story, article, targetYear) {
     `${section} outlook`;
 
   const yearPrefix = Number.isFinite(Number(targetYear)) ? `${Number(targetYear)}:` : 'Future:';
-  const title = `${yearPrefix} ${sourcePhrase}`.slice(0, 160).trim();
+  const headlineSeed = toHeadlineCase(sourcePhrase) || `${section} Update`;
+  const title = `${yearPrefix} ${headlineSeed}`.slice(0, 160).trim();
 
   const detailPhrase =
     normalizePhrase(story?.curation?.futureEventSeed || '', 180) ||
@@ -392,7 +409,8 @@ function buildFutureFallbackCopy(story, article, targetYear) {
     `${sourcePhrase.toLowerCase()} becomes a defining ${section.toLowerCase()} storyline`;
 
   const timeLead = editionDate ? `By ${editionDate}` : Number.isFinite(Number(targetYear)) ? `By ${Number(targetYear)}` : 'By the target edition';
-  const dek = `${timeLead}, ${detailPhrase}.`.slice(0, 280).trim();
+  const detailClean = String(detailPhrase || '').replace(/^by\s+[a-z]+\s+\d{1,2},\s+\d{4},\s*/i, '').trim();
+  const dek = `${timeLead}, ${detailClean || `${section.toLowerCase()} developments become a defining storyline`}.`.slice(0, 280).trim();
 
   return { title, dek };
 }
