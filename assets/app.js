@@ -491,10 +491,17 @@
     if (!nav) return;
     const articles = payload && Array.isArray(payload.articles) ? payload.articles : [];
     const activeSections = new Set(articles.map((a) => normalizeSection(a.section || '')));
-    activeSections.add(SECTION_ALL);
     nav.querySelectorAll('a[data-section]').forEach((link) => {
       const sec = normalizeSection(link.dataset.section || '');
-      link.style.display = activeSections.has(sec) ? '' : 'none';
+      link.style.display = '';
+      if (sec === SECTION_ALL || activeSections.has(sec)) {
+        link.style.opacity = '';
+        link.removeAttribute('title');
+      } else {
+        // Keep all tabs visible so navigation is stable even on thin editions.
+        link.style.opacity = '0.55';
+        link.title = `No ${sec} stories available in this edition yet.`;
+      }
     });
   }
 
@@ -875,15 +882,19 @@
     }
 
     const hasImage = (article) => Boolean(getArticleImageUrl(article));
-    const heroArticle =
-      (normalizedSection !== SECTION_ALL
-        ? (articlesInSection.find(hasImage) ||
-          payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id) && hasImage(article)) ||
-          payload.articles.find(hasImage) ||
-          null)
-        : (payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id) && hasImage(article)) ||
-          payload.articles.find(hasImage) ||
-          null));
+    const heroArticle = (() => {
+      if (normalizedSection !== SECTION_ALL) {
+        // In section mode, anchor the lead to that section instead of reusing a global hero.
+        return articlesInSection.find(hasImage) || articlesInSection[0] || null;
+      }
+      return (
+        payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id) && hasImage(article)) ||
+        payload.articles.find(hasImage) ||
+        payload.articles.find((article) => article.id === (payload.heroId || payload.articles[0].id)) ||
+        payload.articles[0] ||
+        null
+      );
+    })();
 
     if (!heroArticle) {
       const imageSource = normalizedSection === SECTION_ALL ? payload.articles : articlesInSection;
@@ -954,7 +965,7 @@
     }
 
     const sectionsToRender = selectedSection === SECTION_ALL ? SECTION_ORDER : [selectedSection];
-    const perSectionLimit = selectedSection === SECTION_ALL ? 3 : 50;
+    const perSectionLimit = selectedSection === SECTION_ALL ? 2 : 50;
 
     for (const sectionName of sectionsToRender) {
       const sectionArticles = (grouped.get(sectionName) || []).slice(0, perSectionLimit);

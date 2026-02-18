@@ -811,13 +811,9 @@ export class FutureTimesPipeline {
       };
     });
 
-    // Only include articles the LLM actually curated (confidence > 0).
-    // Uncurated articles have garbage auto-generated titles and no body.
-    const curatedArticles = patchedArticles.filter((a) => {
-      const conf = Number(a.confidence);
-      return conf > 0;
-    });
-    const finalArticles = curatedArticles.length > 0 ? curatedArticles : patchedArticles;
+    // Preserve the full edition so each section keeps coverage even when curation
+    // confidence lands at zero for some stories.
+    const finalArticles = patchedArticles;
 
     const resolvedHeroId = heroOverride || base.heroId || base.heroStoryId || (finalArticles[0] ? finalArticles[0].id : null);
     const dayCuration = this.getDayCuration(base.day);
