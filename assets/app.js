@@ -5,8 +5,8 @@
   const DEFAULT_YEARS = 5;
   const SECTION_ORDER = ['U.S.', 'World', 'Business', 'Technology', 'AI', 'Arts', 'Lifestyle', 'Opinion'];
   const SECTION_ALL = 'All';
-  const EDITION_CACHE_KEY = 'future-times-edition-cache-v17';
-  const ARTICLE_CACHE_KEY = 'future-times-article-cache-v17';
+  const EDITION_CACHE_KEY = 'future-times-edition-cache-v18';
+  const ARTICLE_CACHE_KEY = 'future-times-article-cache-v18';
   const EDITION_TTL_MS = 1000 * 60 * 60;
   const ARTICLE_TTL_MS = 1000 * 60 * 20;
   const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
@@ -698,12 +698,42 @@
 
   async function fetchJSON(url, options) {
     const response = await fetch(url, options);
-    if (!response.ok) {
-      const raw = await response.text().catch(() => '');
-      const message = raw ? ` (${raw.slice(0, 140)})` : '';
-      throw new Error(`Request failed ${response.status} ${response.statusText}${message}`);
+    const raw = await response.text().catch(() => '');
+    let parsed = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
     }
-    return response.json();
+    if (!response.ok) {
+      const apiError = parsed && typeof parsed === 'object' ? String(parsed.error || parsed.status || '').trim() : '';
+      const message = apiError || response.statusText || 'request_failed';
+      const err = new Error(`Request failed ${response.status} (${message})`);
+      err.httpStatus = response.status;
+      err.api = parsed;
+      err.raw = raw;
+      throw err;
+    }
+    if (parsed != null) return parsed;
+    return {};
+  }
+
+  async function recoverFilteredArticle(articleId, years, day = '') {
+    try {
+      const payload = await getEditionPayload(years, day);
+      const list = Array.isArray(payload?.articles) ? payload.articles : [];
+      if (!list.length) return false;
+      const replacement =
+        list.find((entry) => entry && entry.id && entry.id !== articleId && getArticleImageUrl(entry)) ||
+        list.find((entry) => entry && entry.id && entry.id !== articleId) ||
+        null;
+      if (!replacement || !replacement.id) return false;
+      const resolvedDay = normalizeDay(payload?.day || '') || normalizeDay(day) || '';
+      location.replace(getArticleUrl(replacement.id, years, resolvedDay));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function filterCuratedArticles(payload) {
@@ -1271,7 +1301,18 @@
       const body = document.getElementById('md');
       const prompt = document.getElementById('prompt');
       const hero = document.getElementById('aHero');
-      const status = `${error.message || 'unknown error'}`;
+      const isFiltered = Number(error?.httpStatus) === 410 &&
+        (String(error?.api?.status || '').toLowerCase() === 'filtered' ||
+         String(error?.api?.error || '').toLowerCase() === 'story_not_future_aligned');
+      if (isFiltered) {
+        const recovered = await recoverFilteredArticle(articleId, clampedYears, normalizeDay(day) || normalizedDay);
+        if (recovered) {
+          return null;
+        }
+      }
+      const status = isFiltered
+        ? 'This story was removed by future-lens editorial checks. Loading an updated article failed.'
+        : `${error.message || 'unknown error'}`;
 
       if (statusText) {
         statusText.textContent = `Article unavailable: ${status}`;
@@ -1289,9 +1330,11 @@
       if (hero) hero.style.display = 'none';
       if (prompt) prompt.textContent = 'Unavailable until the next daily curated publish.';
       if (body) {
-        body.innerHTML = '<p>This story is not published yet. It will appear after the next daily curated pre-render run.</p>';
+        body.innerHTML = isFiltered
+          ? '<p>This story was removed by editorial quality checks for +5y consistency. Please return to the front page and open another story.</p>'
+          : '<p>This story is not published yet. It will appear after the next daily curated pre-render run.</p>';
       }
-      throw error;
+      return null;
     }
   }
 
