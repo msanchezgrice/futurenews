@@ -3052,6 +3052,31 @@ async function requestHandler(req, res) {
       return;
     }
 
+    if (pathname === '/api/images/health') {
+      if (req.method !== 'GET') return send405(res, 'GET');
+      const requestedDay = day || pipeline.getLatestDay() || formatDay();
+      const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
+      const state = await getImagesAdminState({ day: requestedDay, pipeline, yearsForward });
+      const sectionHeroes = Array.isArray(state?.sectionHeroes) ? state.sectionHeroes : [];
+      sendJson(res, {
+        ok: Boolean(state?.ok),
+        day: state?.day || requestedDay,
+        yearsForward,
+        config: state?.config || {},
+        edition: state?.edition || null,
+        queue: state?.queue || {},
+        sectionHeroes: sectionHeroes.map((entry) => ({
+          section: entry.section,
+          storyId: entry.storyId,
+          status: entry.status,
+          assetUrl: entry.assetUrl || '',
+          lastError: entry.lastError || null
+        })),
+        failures: Array.isArray(state?.failures) ? state.failures.slice(0, 10) : []
+      });
+      return;
+    }
+
     if (pathname === '/api/admin/images/ideas/refresh') {
       if (req.method !== 'POST') return send405(res, 'POST');
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
