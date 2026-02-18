@@ -181,7 +181,7 @@ export function renderImagesAdminHtml({ day, yearsForward = 5 } = {}) {
         const badgeClass = status === 'failed' ? 'badge danger' : 'badge';
         const badge = '<span class=\"' + badgeClass + '\">' + esc(status) + '</span>';
         return '<div class=\"heroCard\">' +
-          '<img class=\"heroImg\" src=\"' + esc(img || 'assets/img/humanoids-labor-market.svg') + '\"/>' +
+          (img ? '<img class=\"heroImg\" src=\"' + esc(img) + '\"/>' : '') +
           '<div class=\"heroMeta\">' +
             '<div class=\"row\" style=\"justify-content:space-between\">' +
               '<div class=\"mono\"><strong>' + esc(h.section) + '</strong></div>' +

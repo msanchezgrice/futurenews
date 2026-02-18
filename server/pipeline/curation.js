@@ -3,6 +3,8 @@ import { readOpusRuntimeConfig } from './runtimeConfig.js';
 
 export const DEFAULT_OPUS_SYSTEM_PROMPT =
   'You are Opus 4.6 acting as a high-quality daily trend curator. Return JSON only. If unsure, pick the most plausible editorial framing.';
+export const DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT =
+  'You are Opus 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
 
 function clampInt(value, fallback, min, max) {
   const n = Number(value);
@@ -22,14 +24,13 @@ export function getOpusCurationConfigFromEnv() {
   const apiKeyEnv = String(process.env.OPUS_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
   const apiKeyStored = String(stored.apiKey || '').trim();
   const hasKey = Boolean(apiKeyEnv || apiKeyStored);
-  const mode = normalizeMode(modeRaw || (hasKey ? 'anthropic' : 'mock'));
-
-  // Default to Sonnet for curation (faster, fits within Vercel timeout with full article generation)
-  const modelDefault = mode === 'anthropic' ? 'claude-sonnet-4-5-20250929' : 'claude-sonnet-4-5-20250929';
-  const model = String(process.env.OPUS_MODEL || stored.model || modelDefault).trim() || modelDefault;
+  const requestedMode = normalizeMode(modeRaw || 'anthropic');
+  const mode = 'anthropic';
+  // Story writing is Sonnet-only.
+  const model = 'claude-sonnet-4-5-20250929';
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
-  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 40000, 4000, 64000);
+  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
   // On Vercel: 250s to fit within 300s limit. Locally: allow more time.
   const isVercel = Boolean(process.env.VERCEL);
   const defaultTimeout = isVercel ? 250000 : 500000;
@@ -40,7 +41,7 @@ export function getOpusCurationConfigFromEnv() {
     String(process.env.OPUS_SYSTEM_PROMPT || stored.systemPrompt || '').trim() || DEFAULT_OPUS_SYSTEM_PROMPT;
 
   return {
-    mode, // 'mock' | 'anthropic' | 'openai' | 'off'
+    mode, // Sonnet-only via Anthropic
     model,
     keyStoriesPerEdition,
     maxTokens,
@@ -94,9 +95,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
       .map((s) => `- ${String(s.title || '').slice(0, 160)} (${String(s.source || '').slice(0, 40)})`)
       .join('\n');
 
-  // Send top 20 candidates — LLM writes full articles for 3 key stories only.
-  // Non-key stories get curatedTitle/curatedDek/sparkDirections (short).
-  const cappedCandidates = (candidates || []).slice(0, 20);
+  // Send a broad candidate set so low-rank stories still get explicit editorial handling.
+  const cappedCandidates = (candidates || []).slice(0, 36);
   const candidateLines = cappedCandidates
     .map((c) => {
       const topic = c.topic || {};
@@ -157,8 +157,7 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
-    `- For KEY stories (max ${keyCount}): write a full draftArticle with title, dek, body (3-4 paragraphs, NYT-style).`,
-    `- For NON-KEY stories: set draftArticle to null. Keep sparkDirections detailed (1-2 sentences describing the future event). A second pass generates bodies.`,
+    `- For EVERY story: write a full draftArticle with title, dek, body (3-4 paragraphs, NYT-style). KEY stories get 4 paragraphs, others get 3 paragraphs minimum.`,
     `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
@@ -197,8 +196,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- confidence: integer 0-100 rating the plausibility of this prediction.`,
     aiExtrapolationBlock,
     `JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"} or null for non-key}]}`,
-    `KEY stories must have a draftArticle with title, dek, and body (3-4 paragraphs). Non-key stories: draftArticle=null, sparkDirections required.`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"}}]}`,
+    `ALL stories MUST have a draftArticle with title, dek, and body (3-4 paragraphs). No exceptions — every story needs a full article.`,
     ``,
     ``,
     `Story candidates (must use these storyIds exactly):`,
@@ -216,6 +215,65 @@ function uniqueStrings(list) {
     out.push(s);
   }
   return out;
+}
+
+function trimText(value, maxLen = 1200) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  return text.length <= maxLen ? text : text.slice(0, maxLen).trim();
+}
+
+function normalizeEditorDecision(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'reject' || raw === 'rejected' || raw === 'drop') return 'reject';
+  if (raw === 'revise' || raw === 'rewrite' || raw === 'fix') return 'revise';
+  return 'approve';
+}
+
+export function buildFutureEditorPrompt({ day, yearsForward, editionDate, stories }) {
+  const storyLines = (Array.isArray(stories) ? stories : [])
+    .slice(0, 48)
+    .map((story, idx) => {
+      const evidence = Array.isArray(story?.evidence) ? story.evidence : [];
+      const evidenceLines = evidence
+        .slice(0, 2)
+        .map((line) => `    - ${trimText(line, 140)}`)
+        .join('\n');
+
+      return [
+        `${idx + 1}. storyId: ${String(story?.storyId || '').trim()}`,
+        `   section: ${String(story?.section || '').trim() || 'World'} rank: ${Number.isFinite(Number(story?.rank)) ? Number(story.rank) : 9999}`,
+        `   topic: ${trimText(story?.topicLabel || '', 120) || '(none)'}`,
+        `   title: ${trimText(story?.title || '', 220)}`,
+        `   dek: ${trimText(story?.dek || '', 260)}`,
+        `   body_excerpt: ${trimText(story?.body || '', 900)}`,
+        evidenceLines ? `   evidence:\n${evidenceLines}` : ''
+      ].filter(Boolean).join('\n');
+    })
+    .join('\n\n');
+
+  return [
+    `You are the final editorial standards gate for The Future Times.`,
+    `Edition date: ${editionDate} (yearsForward=${yearsForward}, baseline day=${day}).`,
+    ``,
+    `Task: For EVERY story below, decide whether it makes sense as a real newspaper story from ${editionDate}.`,
+    `Allowed decisions: approve, revise, reject.`,
+    ``,
+    `Decision policy:`,
+    `- approve: coherent, plausible, and properly future-anchored.`,
+    `- revise: salvageable but needs corrected headline/dek/body wording to fit ${editionDate}.`,
+    `- reject: does not make sense from a ${editionDate} lens, is timeline-incoherent, contradictory, or fundamentally weak.`,
+    ``,
+    `Reject examples: impossible age/time math, memorialized "legacy" framing with no concrete future development, nonspecific filler, obvious present-day recaps pretending to be future news.`,
+    `For revise: provide corrected title and dek. Body is optional, but include a replacement body excerpt if the current copy is materially wrong.`,
+    ``,
+    `Output STRICT JSON only (no markdown fences).`,
+    `Schema:`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","stories":[{"storyId":"id","decision":"approve|revise|reject","reason":"string","title":"string","dek":"string","body":"string"}]}`,
+    ``,
+    `Stories:`,
+    storyLines || '- (none)'
+  ].join('\n');
 }
 
 function resolveAnthropicModelAlias(model) {
@@ -425,40 +483,97 @@ export async function generateEditionCurationPlan(input) {
   const config = input?.config || getOpusCurationConfigFromEnv();
   const mode = normalizeMode(config.mode);
   if (mode === 'off' || mode === 'disabled') {
-    return {
-      schema: 1,
-      day: input?.day || '',
-      yearsForward: input?.yearsForward ?? 0,
-      editionDate: input?.editionDate || '',
-      generatedAt: isoNow(),
-      model: 'off',
-      keyStoryIds: [],
-      stories: []
-    };
+    throw new Error('Curation is Sonnet-only. OPUS_MODE cannot be off/disabled.');
   }
 
   const keyCount = clampInt(input?.keyCount ?? config.keyStoriesPerEdition, 1, 0, 7);
-  if (mode === 'mock' || mode === 'off' || mode === 'disabled') {
-    throw new Error(`OPUS_MODE="${mode}" — mock curation removed. Set OPUS_MODE=anthropic with a valid API key.`);
+  if (mode !== 'anthropic') {
+    throw new Error(`OPUS_MODE="${mode}" is not allowed. Story writing is Sonnet-only via Anthropic.`);
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
-  if (mode === 'anthropic') {
-    const parsed = await callAnthropicJson(prompt, config);
-    if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
-    return parsed;
+  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-sonnet-4-5-20250929' });
+  if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
+  return parsed;
+}
+
+export async function reviewEditionWithFutureEditor(input) {
+  const config = input?.config || getOpusCurationConfigFromEnv();
+  const mode = normalizeMode(config.mode);
+  const stories = Array.isArray(input?.stories) ? input.stories : [];
+  if (mode !== 'anthropic' || !stories.length) {
+    return {
+      schema: 1,
+      day: String(input?.day || '').trim(),
+      yearsForward: Number(input?.yearsForward) || 5,
+      editionDate: String(input?.editionDate || '').trim(),
+      stories: [],
+      skipped: true,
+      reason: !stories.length ? 'no_stories' : 'mode_not_supported'
+    };
   }
-  if (mode === 'openai') {
-    const parsed = await callOpenAiJson(prompt, config);
-    if (!parsed) throw new Error('OpenAI curation returned no parseable JSON — no fallback.');
-    return parsed;
+  if (!String(config.apiKey || '').trim()) {
+    return {
+      schema: 1,
+      day: String(input?.day || '').trim(),
+      yearsForward: Number(input?.yearsForward) || 5,
+      editionDate: String(input?.editionDate || '').trim(),
+      stories: [],
+      skipped: true,
+      reason: 'missing_api_key'
+    };
   }
 
-  throw new Error(`Unknown OPUS_MODE="${mode}" — no mock fallback available.`);
+  const prompt = String(input?.prompt || '').trim() || buildFutureEditorPrompt({
+    day: input?.day,
+    yearsForward: input?.yearsForward,
+    editionDate: input?.editionDate,
+    stories
+  });
+
+  const reviewConfig = {
+    ...config,
+    model: 'claude-opus-4-6',
+    maxTokens: Math.min(Number(config.maxTokens) || 24000, 32000),
+    timeoutMs: Math.min(Number(config.timeoutMs) || 180000, 240000),
+    systemPrompt: String(config.editorSystemPrompt || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT)
+  };
+
+  const parsed = await callAnthropicJson(prompt, reviewConfig);
+  const rawStories = Array.isArray(parsed?.stories)
+    ? parsed.stories
+    : Array.isArray(parsed?.decisions)
+      ? parsed.decisions
+      : [];
+
+  const out = [];
+  const seen = new Set();
+  for (const entry of rawStories) {
+    const storyId = String(entry?.storyId || '').trim();
+    if (!storyId || seen.has(storyId)) continue;
+    seen.add(storyId);
+    out.push({
+      storyId,
+      decision: normalizeEditorDecision(entry?.decision || entry?.status || 'approve'),
+      reason: trimText(entry?.reason || entry?.why || '', 320),
+      title: trimText(entry?.title || entry?.revisedTitle || '', 220),
+      dek: trimText(entry?.dek || entry?.revisedDek || '', 320),
+      body: trimText(entry?.body || entry?.revisedBody || '', 2400)
+    });
+  }
+
+  return {
+    schema: 1,
+    day: String(input?.day || '').trim(),
+    yearsForward: Number(input?.yearsForward) || 5,
+    editionDate: String(input?.editionDate || '').trim(),
+    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-opus-4-6',
+    stories: out
+  };
 }
 
 /**
- * Generate short article bodies for stories that are missing them.
+ * Generate full article bodies for stories that are missing them.
  * Takes an array of { storyId, title, dek, sparkDirections, editionDate, section }
  * Processes in batches to stay within timeout limits.
  * Returns a Map<storyId, { title, dek, body }>.
@@ -470,7 +585,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
   if (mode !== 'anthropic') return new Map();
 
   const isVercel = Boolean(process.env.VERCEL);
-  const BATCH_SIZE = isVercel ? 9 : 17;
+  const BATCH_SIZE = isVercel ? 5 : 10;
   const result = new Map();
 
   const batches = [];
@@ -486,7 +601,8 @@ export async function generateMissingArticleBodies(stories, configOverride) {
 
     const prompt = [
       `You are a journalist writing for "The Future Times", a newspaper from ${editionDate}.`,
-      `Write a short article body for each story below. Each body: 1 concise paragraph (3-5 sentences), NYT-style, written as real news from ${editionDate}.`,
+      `Write a FULL article body for each story below. Each body: 3-4 paragraphs, NYT-style, written as real journalism from ${editionDate}.`,
+      `Each paragraph should be 3-5 sentences. Total body should be 250-400 words per article.`,
       `Do NOT mention forecasts, predictions, AI, or that you are simulating. Write as fact.`,
       `Do NOT include a Sources section. No section headings.`,
       ``,
@@ -499,8 +615,8 @@ export async function generateMissingArticleBodies(stories, configOverride) {
 
     const backfillConfig = {
       ...config,
-      maxTokens: Math.min(config.maxTokens, 12000),
-      timeoutMs: isVercel ? 80000 : 180000,
+      maxTokens: Math.min(config.maxTokens, 24000),
+      timeoutMs: isVercel ? 120000 : 240000,
       model: 'claude-sonnet-4-5-20250929'
     };
 

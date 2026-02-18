@@ -2,14 +2,14 @@ export const EDITION_SEED = {
   baseYear: 2026,
   generatedFromTemplate: 'Signals from 2026',
   editionMonthDay: 'January 29',
-  editionImage: 'assets/img/humanoids-labor-market.svg',
+  editionImage: '',
   articles: [
     {
       id: 'humanoids-labor-market',
       section: 'U.S.',
       title: 'Humanoid Robots Now Fill 12% of Warehouse Jobs Globally',
       dek: 'Five years after the first commercial deployments, autonomous humanoid workers have reshaped logistics—and the debate over universal basic income.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: '8 min read • Based on 47 signals • 73% market confidence',
       prompt: 'Photorealistic warehouse interior, humanoid robots with sleek white/gray chassis working alongside human supervisors, soft industrial lighting, conveyor belts with packages, clean modern aesthetic, depth of field, 8K detail',
       signals: [
@@ -147,7 +147,7 @@ The shift galvanized climate action. Three major economies announced net-zero ac
       section: 'U.S.',
       title: 'National Grid Goes AI-Directed After Successive Heatwaves',
       dek: 'Two summers in a row of severe storms changed how utilities monitor and reroute power at scale.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: '7 min read • Based on 26 signals • 71% market confidence',
       prompt: 'High-contrast utility control room with wall-sized grid dashboards, operators and AI overlays highlighting infrastructure status, cinematic editorial photography style',
       signals: [
@@ -185,7 +185,7 @@ Automation reduced response times and staff fatigue, but also created governance
       section: 'World',
       title: 'Sea Routes Shift North as Arctic Shipping Expands',
       dek: 'Ports in northern latitudes become new hubs while old chokepoints lose share under new climate patterns.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: '9 min read • Based on 34 signals • 79% market confidence',
       prompt: 'Aerial shot of an icy northern port with cargo ships cutting through ice-free channels, mixed fog and sunrise, documentary realism',
       signals: [
@@ -221,7 +221,7 @@ Communities near old ports face labor reprioritization, new training demands, an
       section: 'Arts',
       title: 'Holographic Galleries Turn Every City into a Weekend Festival',
       dek: 'Public plazas now host micro-exhibitions that blend projection art and local storytelling.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: '5 min read • Based on 19 signals • 81% audience growth confidence',
       prompt: 'Crowds in a city square viewing a large holographic mixed-reality art installation, colorful projections in evening light, cinematic city journalism photo',
       signals: [
@@ -257,7 +257,7 @@ Curators argue this could become paywalled spectacle. Supporters call it accessi
       section: 'Lifestyle',
       title: 'The Quiet Life Economy: 30-Minute Commutes Are Back',
       dek: 'Urban design and remote work shifts reduced stress metrics and changed where people choose to live.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: '4 min read • Based on 21 signals • 64% confidence',
       prompt: 'A calm walkable suburban train-to-work corridor with mixed-use development, greenery, and pedestrians on a sunny afternoon',
       signals: [
@@ -293,7 +293,7 @@ The shift is less about nostalgia and more about resilience. Families and firms 
       section: 'Opinion',
       title: 'Opinion: Why the Next Automation Wave Must Be Democratically Chosen',
       dek: 'A forward-looking editorial argues for explicit social compacts before deployment decisions become irreversible.',
-      image: 'assets/img/humanoids-labor-market.svg',
+      image: '',
       baseMeta: 'Opinion • 6 min read • 5k+ references',
       prompt: 'Editorial style close-up of a city council chamber debate, citizens and AI dashboards visible behind speakers',
       signals: [
