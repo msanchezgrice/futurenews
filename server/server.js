@@ -293,6 +293,29 @@ function isFutureAlignedStory({ id, title, dek }, story, { day, yearsForward }) 
   return true;
 }
 
+function isStoryRejectedByEditor(story) {
+  const decision = String(
+    story?.curation?.editorDecision ||
+    story?.curation?.editor?.decision ||
+    ''
+  ).trim().toLowerCase();
+  return decision === 'reject' || decision === 'rejected';
+}
+
+function isStoryFuturePublishable(story, article = null) {
+  if (!story) return false;
+  if (isStoryRejectedByEditor(story)) return false;
+  const id = String(story?.storyId || article?.id || '').trim();
+  const title = String(article?.title || story?.headlineSeed || story?.title || '').trim();
+  const dek = String(article?.dek || story?.dekSeed || story?.dek || '').trim();
+  if (!id || !title || !dek) return false;
+  return isFutureAlignedStory(
+    { id, title, dek },
+    story,
+    { day: story?.day || '', yearsForward: Number(story?.yearsForward) || EDITION_YEARS }
+  );
+}
+
 function isFinalRenderedImage(value) {
   const raw = String(value || '').trim();
   if (!raw) return false;
@@ -3894,10 +3917,18 @@ async function requestHandler(req, res) {
         sendJson(res, { status: 'not_found', storyId, error: 'Unknown story id' }, 404);
         return;
       }
+      if (!isStoryFuturePublishable(story)) {
+        sendJson(res, { status: 'filtered', storyId, error: 'story_not_future_aligned' }, 410);
+        return;
+      }
 
       const preRendered = getPreRenderedArticle(storyId, story);
       if (!preRendered) {
         sendJson(res, { status: 'not_ready', storyId, error: 'article_not_pre_rendered' }, 409);
+        return;
+      }
+      if (!isStoryFuturePublishable(story, preRendered)) {
+        sendJson(res, { status: 'filtered', storyId, error: 'story_not_future_aligned' }, 410);
         return;
       }
       let article = preRendered;
