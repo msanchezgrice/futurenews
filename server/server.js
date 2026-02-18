@@ -550,6 +550,7 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       ORDER BY e.day DESC, s.section ASC, s.rank ASC
       LIMIT 320;
     `).all(resolvedYears, resolvedDay);
+    const sourceEditionsByDay = new Map();
 
     for (const row of rows || []) {
       if (candidates.length >= MIN_PUBLISHED_STORIES * 2) break;
@@ -559,12 +560,25 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       if (!story) continue;
       const editionDate = String(story?.evidencePack?.editionDate || '').trim();
       const sourceDay = String(row?.source_day || '').trim();
+      let sourceImage = '';
+      if (sourceDay) {
+        if (!sourceEditionsByDay.has(sourceDay)) {
+          const sourceEdition = pipeline.getEdition(sourceDay, resolvedYears, { applyCuration: false });
+          sourceEditionsByDay.set(sourceDay, sourceEdition || null);
+        }
+        const sourceEdition = sourceEditionsByDay.get(sourceDay);
+        const sourceArticle = Array.isArray(sourceEdition?.articles)
+          ? sourceEdition.articles.find((entry) => String(entry?.id || '').trim() === id)
+          : null;
+        sourceImage = String(sourceArticle?.image || '').trim();
+      }
       const seedArticle = {
         id,
         section: String(row?.section || story.section || 'World'),
         rank: Number(row?.rank),
         title: String(story?.headlineSeed || '').trim(),
         dek: String(story?.dekSeed || '').trim(),
+        image: sourceImage,
         meta: editionDate
           ? `${story.section} • ${editionDate}`
           : sourceDay
