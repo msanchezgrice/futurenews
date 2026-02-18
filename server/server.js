@@ -259,8 +259,13 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
   const lower = t.toLowerCase();
   if (/^share\b/.test(lower)) return true;
   if (/^readers?\b/.test(lower)) return true;
+  if (/^how\s+/.test(lower)) return true;
+  if (/^the\s+future\s+of\s+/.test(lower)) return true;
+  if (/^\d+\s+years?\s+after\b/.test(lower)) return true;
   if (/^what(?:'s| is)\s+the state of\b/i.test(t)) return true;
   if (/\bhas died\b/i.test(t)) return true;
+  if (/\bafter\b[^.]{0,90}\bdeath at\s+\d{2,3}\b/i.test(t)) return true;
+  if (/\b(legacy|posthumous|memorial|remembering|tribute)\b/i.test(t)) return true;
   if (/\bhas had\b.+\bin\s+\d{4}\s*$/i.test(t)) return true;
   if (/^\s*['"“‘].+['"”’]\s+in\s+\d{4}\s*$/i.test(t)) return true;
   if (Number.isFinite(targetYear) && new RegExp(`\\bin\\s+${targetYear}\\s*$`, 'i').test(t)) {
@@ -489,6 +494,9 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       const fallback = buildFutureFallbackCopy(story, articleInput, targetYear);
       title = String(fallback.title || title).trim();
       dek = String(fallback.dek || dek).trim();
+    }
+    if (!isFutureAlignedStory({ id, title, dek }, story, { day: resolvedDay, yearsForward: resolvedYears })) {
+      return null;
     }
     if (!title || title.length < 10 || !dek || dek.length < 20) return null;
 
