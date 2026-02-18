@@ -39,6 +39,8 @@ const EDITION_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_EDIT
 const HERO_IMAGE_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_COOLDOWN_MS || 15 * 60 * 1000));
 const HERO_IMAGE_RECOVERY_MAX_MS = Math.max(10_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_MAX_MS || 30_000));
 const HERO_IMAGE_RECOVERY_LIMIT = Math.max(1, Number(process.env.FT_HERO_IMAGE_RECOVERY_LIMIT || 4));
+const MIN_PUBLISHED_STORIES = Math.max(1, Number(process.env.FT_MIN_PUBLISHED_STORIES || 20));
+const MIN_STORIES_PER_SECTION = Math.max(1, Number(process.env.FT_MIN_STORIES_PER_SECTION || 3));
 const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
 
 // ── Admin auth ──
@@ -296,6 +298,126 @@ function sanitizeFinalImage(value) {
   return isFinalRenderedImage(raw) ? raw : '';
 }
 
+function clampConfidence(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return Math.max(0, Math.min(100, Math.round(Number(fallback) || 0)));
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function sectionOrderIndex(section) {
+  const normalized = String(section || '').trim();
+  const idx = SECTION_ORDER.findIndex((entry) => entry === normalized);
+  return idx >= 0 ? idx : SECTION_ORDER.length + 1;
+}
+
+function normalizePhrase(value, maxLen = 120) {
+  const raw = String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/^['"“‘]+|['"”’]+$/g, '')
+    .trim();
+  if (!raw) return '';
+  const cleaned = raw
+    .replace(/^a\s+\d{4}\s+report\s+on\s+/i, '')
+    .replace(/\bin\s+\d{4}\s*$/i, '')
+    .replace(/^share\s+/i, '')
+    .replace(/^readers?\s+on\s+/i, '')
+    .trim();
+  const candidate = cleaned || raw;
+  return candidate.length > maxLen ? candidate.slice(0, maxLen).trim() : candidate;
+}
+
+function buildFutureFallbackCopy(story, article, targetYear) {
+  const section = String(story?.section || article?.section || 'Edition').trim() || 'Edition';
+  const editionDate = String(story?.evidencePack?.editionDate || '').trim();
+  const sourcePhrase =
+    normalizePhrase(story?.curation?.topicTitle || '', 90) ||
+    normalizePhrase(story?.evidencePack?.topic?.theme || '', 90) ||
+    normalizePhrase(story?.evidencePack?.topic?.label || '', 90) ||
+    normalizePhrase(story?.headlineSeed || article?.title || '', 90) ||
+    `${section} outlook`;
+
+  const yearPrefix = Number.isFinite(Number(targetYear)) ? `${Number(targetYear)}:` : 'Future:';
+  const title = `${yearPrefix} ${sourcePhrase}`.slice(0, 160).trim();
+
+  const detailPhrase =
+    normalizePhrase(story?.curation?.futureEventSeed || '', 180) ||
+    normalizePhrase(story?.curation?.sparkDirections || '', 180) ||
+    normalizePhrase(article?.dek || story?.dekSeed || '', 180) ||
+    `${sourcePhrase.toLowerCase()} becomes a defining ${section.toLowerCase()} storyline`;
+
+  const timeLead = editionDate ? `By ${editionDate}` : Number.isFinite(Number(targetYear)) ? `By ${Number(targetYear)}` : 'By the target edition';
+  const dek = `${timeLead}, ${detailPhrase}.`.slice(0, 280).trim();
+
+  return { title, dek };
+}
+
+function selectBalancedPublishedStories(candidates, options = {}) {
+  const minTotal = Math.max(1, Number(options.minTotal || MIN_PUBLISHED_STORIES));
+  const minPerSection = Math.max(1, Number(options.minPerSection || MIN_STORIES_PER_SECTION));
+  if (!Array.isArray(candidates) || !candidates.length) return [];
+
+  const sorted = [...candidates].sort((a, b) => {
+    const strictDelta = Number(Boolean(b._strict)) - Number(Boolean(a._strict));
+    if (strictDelta) return strictDelta;
+    const confDelta = (Number(b.confidence) || 0) - (Number(a.confidence) || 0);
+    if (confDelta) return confDelta;
+    const sectionDelta = sectionOrderIndex(a.section) - sectionOrderIndex(b.section);
+    if (sectionDelta) return sectionDelta;
+    return (Number(a._rank) || 9999) - (Number(b._rank) || 9999);
+  });
+
+  const selected = new Map();
+  const countSection = (section) => {
+    let count = 0;
+    for (const candidate of selected.values()) {
+      if (String(candidate.section || '') === String(section || '')) count++;
+    }
+    return count;
+  };
+  const add = (candidate) => {
+    const id = String(candidate?.id || '').trim();
+    if (!id || selected.has(id)) return false;
+    selected.set(id, candidate);
+    return true;
+  };
+
+  for (const candidate of sorted) {
+    if (candidate._strict) add(candidate);
+  }
+
+  if (selected.size < minTotal) {
+    const bySection = new Map();
+    for (const candidate of sorted) {
+      const section = String(candidate.section || 'World');
+      if (!bySection.has(section)) bySection.set(section, []);
+      bySection.get(section).push(candidate);
+    }
+
+    const sectionsByPriority = Array.from(bySection.keys()).sort((a, b) => sectionOrderIndex(a) - sectionOrderIndex(b));
+    const maxQuotaSections = Math.max(1, Math.ceil(minTotal / minPerSection));
+    const quotaSections = sectionsByPriority.slice(0, maxQuotaSections);
+
+    for (const section of quotaSections) {
+      const pool = bySection.get(section) || [];
+      for (const candidate of pool) {
+        if (countSection(section) >= minPerSection) break;
+        add(candidate);
+      }
+    }
+
+    for (const candidate of sorted) {
+      if (selected.size >= minTotal) break;
+      add(candidate);
+    }
+  }
+
+  return Array.from(selected.values()).sort((a, b) => {
+    const sectionDelta = sectionOrderIndex(a.section) - sectionOrderIndex(b.section);
+    if (sectionDelta) return sectionDelta;
+    return (Number(a._rank) || 9999) - (Number(b._rank) || 9999);
+  });
+}
+
 function getPreRenderedArticle(storyId, story = null) {
   const key = keyFor(storyId, story);
   const mem = cacheByKey.get(key);
@@ -325,32 +447,61 @@ function filterEditionToPublishedArticles(payload, options = {}) {
   const articles = Array.isArray(base.articles) ? base.articles : [];
   if (!articles.length) return { ...base, articles: [], heroId: null, heroStoryId: null };
 
-  const filtered = [];
+  const candidates = [];
   for (const article of articles) {
     const id = String(article?.id || '').trim();
     if (!id) continue;
+
     const story = pipeline.getStory(id);
     const rendered = getPreRenderedArticle(id, story);
-    if (!rendered) continue;
-    const mergedTitle = String(rendered.title || article.title || '').trim();
-    const mergedDek = String(rendered.dek || article.dek || '').trim();
-    if (!isFutureAlignedStory({ id, title: mergedTitle, dek: mergedDek }, story, { day, yearsForward })) {
-      continue;
+    const targetYear = resolveTargetYear(story, day, yearsForward);
+
+    const rawTitle = String(rendered?.title || article?.title || story?.headlineSeed || '').trim();
+    const rawDek = String(rendered?.dek || article?.dek || story?.dekSeed || '').trim();
+    const strict = Boolean(rendered && isFutureAlignedStory({ id, title: rawTitle, dek: rawDek }, story, { day, yearsForward }));
+
+    let title = rawTitle;
+    let dek = rawDek;
+    if (!isFutureAlignedStory({ id, title, dek }, story, { day, yearsForward })) {
+      const fallback = buildFutureFallbackCopy(story, article, targetYear);
+      title = String(fallback.title || title).trim();
+      dek = String(fallback.dek || dek).trim();
     }
-    const mergedImage = sanitizeFinalImage(rendered.image || article.image || '');
-    filtered.push({
+    if (!title || title.length < 10 || !dek || dek.length < 20) continue;
+
+    const section = String(article?.section || story?.section || 'World').trim() || 'World';
+    const rank = Number.isFinite(Number(story?.rank))
+      ? Number(story.rank)
+      : Number.isFinite(Number(article?.rank))
+        ? Number(article.rank)
+        : 9999;
+    const editionDate = String(story?.evidencePack?.editionDate || '').trim();
+    const meta = String(rendered?.meta || article?.meta || (editionDate ? `${section} • ${editionDate}` : section)).trim();
+    const confidence = clampConfidence(
+      rendered?.confidence,
+      clampConfidence(article?.confidence, clampConfidence(story?.curation?.confidence, 0))
+    );
+    const mergedImage = sanitizeFinalImage(rendered?.image || article?.image || '');
+
+    candidates.push({
       ...article,
-      title: mergedTitle,
-      dek: mergedDek,
-      meta: String(rendered.meta || article.meta || '').trim(),
+      id,
+      section,
+      title,
+      dek,
+      meta,
       image: mergedImage,
-      confidence: Number.isFinite(Number(rendered.confidence))
-        ? Math.max(0, Math.min(100, Math.round(Number(rendered.confidence))))
-        : Number.isFinite(Number(article?.confidence))
-          ? Math.max(0, Math.min(100, Math.round(Number(article.confidence))))
-          : 0
+      confidence,
+      _strict: strict,
+      _rank: rank
     });
   }
+
+  const selected = selectBalancedPublishedStories(candidates, {
+    minTotal: MIN_PUBLISHED_STORIES,
+    minPerSection: MIN_STORIES_PER_SECTION
+  });
+  const filtered = selected.map(({ _strict, _rank, ...article }) => article);
 
   const withImageIds = new Set(
     filtered
@@ -496,7 +647,7 @@ async function buildPublishedEdition(day, yearsForward, payload) {
     // ignore
   }
 
-  let refreshed = pipeline.getEdition(day, yearsForward);
+  let refreshed = pipeline.getEdition(day, yearsForward, { applyCuration: false });
   if (refreshed) {
     published = await decorate(refreshed);
     if ((published?.articles || []).length > 0) return published;
@@ -508,7 +659,7 @@ async function buildPublishedEdition(day, yearsForward, payload) {
     try {
       await pipeline.curateDay(day, { force: true });
       prewarmRenderCacheForDay(day, [yearsForward]);
-      refreshed = pipeline.getEdition(day, yearsForward);
+      refreshed = pipeline.getEdition(day, yearsForward, { applyCuration: false });
       if (refreshed) {
         published = await decorate(refreshed);
       }
@@ -519,7 +670,7 @@ async function buildPublishedEdition(day, yearsForward, payload) {
 
   if (!hasHeroWithFinalImage(published)) {
     await recoverHeroImages(day, yearsForward);
-    const rehydrated = pipeline.getEdition(day, yearsForward);
+    const rehydrated = pipeline.getEdition(day, yearsForward, { applyCuration: false });
     if (rehydrated) {
       published = await decorate(rehydrated);
     }
@@ -817,7 +968,8 @@ async function runAnthropicRenderer(job, story, seedArticle) {
 
   broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
 
-  const model = process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929';
+  // Story writing is Sonnet-only.
+  const model = 'claude-sonnet-4-5-20250929';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -2645,7 +2797,7 @@ async function requestHandler(req, res) {
 	      sendJson(res, {
 	        provider: {
 	          mode: 'anthropic',
-	          articleModel: process.env.ARTICLE_MODEL || 'claude-sonnet-4-5-20250929'
+	          articleModel: 'claude-sonnet-4-5-20250929'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),
@@ -3452,10 +3604,10 @@ async function requestHandler(req, res) {
       if (req.method !== 'GET') return send405(res, 'GET');
       const requestedDay = day || pipeline.getLatestDay() || formatDay();
       let builtDay = requestedDay;
-      let payload = pipeline.getEdition(builtDay, years);
+      let payload = pipeline.getEdition(builtDay, years, { applyCuration: false });
       if (!payload) {
         builtDay = await pipeline.ensureDayBuilt(requestedDay);
-        payload = pipeline.getEdition(builtDay, years);
+        payload = pipeline.getEdition(builtDay, years, { applyCuration: false });
       }
       if (!payload) {
         sendJson(res, { error: 'edition_not_found', day: builtDay, years }, 404);
