@@ -511,6 +511,9 @@ function filterEditionToPublishedArticles(payload, options = {}) {
     const rawTitle = String(rendered?.title || articleInput?.title || story?.headlineSeed || '').trim();
     const rawDek = String(rendered?.dek || articleInput?.dek || story?.dekSeed || '').trim();
     const strict = Boolean(rendered && isFutureAlignedStory({ id, title: rawTitle, dek: rawDek }, story, { day: resolvedDay, yearsForward: resolvedYears }));
+    if (rendered && !strict) {
+      return null;
+    }
 
     let title = rawTitle;
     let dek = rawDek;
