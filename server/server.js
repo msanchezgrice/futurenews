@@ -39,6 +39,7 @@ const EDITION_RECOVERY_COOLDOWN_MS = Math.max(60_000, Number(process.env.FT_EDIT
 const HERO_IMAGE_RECOVERY_COOLDOWN_MS = Math.max(30_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_COOLDOWN_MS || 2 * 60 * 1000));
 const HERO_IMAGE_RECOVERY_MAX_MS = Math.max(10_000, Number(process.env.FT_HERO_IMAGE_RECOVERY_MAX_MS || 120_000));
 const HERO_IMAGE_RECOVERY_LIMIT = Math.max(1, Number(process.env.FT_HERO_IMAGE_RECOVERY_LIMIT || 8));
+const HERO_IMAGE_FORCE_RETRY_COOLDOWN_MS = Math.max(10 * 60 * 1000, Number(process.env.FT_HERO_IMAGE_FORCE_RETRY_COOLDOWN_MS || 3 * 60 * 60 * 1000));
 const MIN_PUBLISHED_STORIES = Math.max(1, Number(process.env.FT_MIN_PUBLISHED_STORIES || 20));
 const MIN_STORIES_PER_SECTION = Math.max(1, Number(process.env.FT_MIN_STORIES_PER_SECTION || 3));
 const BLOCKED_IMAGE_MARKERS = ['humanoids-labor-market.svg'];
@@ -163,6 +164,7 @@ const cacheByKey = new Map(); // storyId -> rendered article
 const socketToSubscriptions = new Map(); // socket -> Set<subscription>
 const editionRecoveryAttempts = new Map(); // day|years -> last attempt ms
 const heroImageRecoveryAttempts = new Map(); // day|years -> last attempt ms
+const heroImageForceAttempts = new Map(); // day|years|story -> last force enqueue ms
 let activePort = null;
 
 startPipelineScheduler();
@@ -729,6 +731,12 @@ async function recoverHeroImages(day, yearsForward, published = null) {
       return extraTargets[0] || null;
     })();
     if (primaryTarget) {
+      const forceKey = `${day}|y${yearsForward}|${primaryTarget.storyId}`;
+      const lastForceMs = Number(heroImageForceAttempts.get(forceKey) || 0);
+      const shouldForce = !lastForceMs || (nowMs - lastForceMs >= HERO_IMAGE_FORCE_RETRY_COOLDOWN_MS);
+      if (shouldForce) {
+        heroImageForceAttempts.set(forceKey, nowMs);
+      }
       try {
         const primary = await enqueueSingleStoryHeroJob({
           day,
@@ -736,7 +744,7 @@ async function recoverHeroImages(day, yearsForward, published = null) {
           storyId: primaryTarget.storyId,
           section: primaryTarget.section,
           yearsForward,
-          force: true,
+          force: shouldForce,
           priority: 1
         });
         extra.push({ primary: true, ...primary });
