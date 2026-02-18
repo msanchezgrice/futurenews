@@ -4029,14 +4029,32 @@ async function requestHandler(req, res) {
       }
 
       let story = pipeline.getStory(storyId);
+      let parsedDayFromId = '';
+      let parsedYearsFromId = null;
       if (!story) {
         const match = String(storyId).match(/^ft-(\d{4}-\d{2}-\d{2})-y(\d+)/);
         if (match) {
+          parsedDayFromId = normalizeDay(match[1]) || '';
+          parsedYearsFromId = clampYears(match[2]);
           await pipeline.ensureDayBuilt(match[1]);
           story = pipeline.getStory(storyId);
         }
       }
       if (!story) {
+        const replacement = await resolveReplacementArticle({
+          day: normalizeDay(url.searchParams.get('day') || '') || parsedDayFromId || formatDay(),
+          yearsForward: clampYears(url.searchParams.get('years') || String(parsedYearsFromId || EDITION_YEARS)),
+          excludedStoryId: storyId
+        });
+        if (replacement) {
+          sendJson(res, {
+            status: 'ready',
+            filtered: true,
+            replacedStoryId: storyId,
+            article: replacement
+          });
+          return;
+        }
         sendJson(res, { status: 'not_found', storyId, error: 'Unknown story id' }, 404);
         return;
       }
