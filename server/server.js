@@ -739,12 +739,14 @@ async function recoverHeroImages(day, yearsForward, published = null) {
 
 async function buildPublishedEdition(day, yearsForward, payload) {
   const decorate = async (editionPayload) => {
-    let decorated = editionPayload;
+    const filtered = filterEditionToPublishedArticles(editionPayload, { day, yearsForward });
+    let decorated = filtered;
     try {
-      decorated = await decorateEditionPayload(editionPayload, { day, yearsForward });
+      decorated = await decorateEditionPayload(filtered, { day, yearsForward });
     } catch {
       // best-effort only
     }
+    // Re-run filtering after decoration so hero selection can use newly-available images.
     return filterEditionToPublishedArticles(decorated, { day, yearsForward });
   };
 
