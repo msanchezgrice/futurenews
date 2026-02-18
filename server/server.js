@@ -262,6 +262,7 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
   if (/^how\s+/.test(lower)) return true;
   if (/^the\s+future\s+of\s+/.test(lower)) return true;
   if (/^\d+\s+years?\s+after\b/.test(lower)) return true;
+  if (/^\d{4}:\s*(the labor market|arts and culture|business and finance|world affairs|technology and innovation|ai and automation|lifestyle and society|public opinion|u\.s\.\s*outlook|us outlook)\s*$/i.test(t)) return true;
   if (/^what(?:'s| is)\s+the state of\b/i.test(t)) return true;
   if (/\bhas died\b/i.test(t)) return true;
   if (/\bafter\b[^.]{0,90}\bdeath at\s+\d{2,3}\b/i.test(t)) return true;
