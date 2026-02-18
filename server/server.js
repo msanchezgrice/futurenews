@@ -468,6 +468,14 @@ function filterEditionToPublishedArticles(payload, options = {}) {
     const id = String(articleInput?.id || '').trim();
     if (!id) return null;
     const story = storyInput || pipeline.getStory(id);
+    const editorDecisionRaw = String(
+      story?.curation?.editorDecision ||
+      story?.curation?.editor?.decision ||
+      ''
+    ).trim().toLowerCase();
+    if (editorDecisionRaw === 'reject' || editorDecisionRaw === 'rejected') {
+      return null;
+    }
     const rendered = getPreRenderedArticle(id, story);
     const targetYear = resolveTargetYear(story, resolvedDay, resolvedYears);
 

@@ -73,7 +73,13 @@ import {
   stableHash,
   tokenize
 } from './utils.js';
-import { buildEditionCurationPrompt, generateEditionCurationPlan, getOpusCurationConfigFromEnv, generateMissingArticleBodies } from './curation.js';
+import {
+  buildEditionCurationPrompt,
+  generateEditionCurationPlan,
+  getOpusCurationConfigFromEnv,
+  generateMissingArticleBodies
+} from './curation.js';
+import { reviewEditionWithFutureEditor } from './future-editor.js';
 
 const DEFAULT_DB_FILE = path.resolve(process.cwd(), 'data', 'future-times.sqlite');
 const DEFAULT_SOURCES_FILE = path.resolve(process.cwd(), 'config', 'sources.json');
@@ -788,6 +794,8 @@ export class FutureTimesPipeline {
       const draftBody = c.plan.draftArticle?.body || '';
       const conf = Number(c.plan.confidence);
       const confClamped = Number.isFinite(conf) ? Math.max(0, Math.min(100, Math.round(conf))) : 0;
+      const editorDecision = String(c.plan.editorDecision || '').trim().toLowerCase();
+      const editorReason = String(c.plan.editorReason || '').trim();
       return {
         ...baseArticle,
         title: curatedTitle || baseArticle.title,
@@ -805,6 +813,14 @@ export class FutureTimesPipeline {
           sparkDirections: c.plan.sparkDirections || '',
           futureEventSeed: c.plan.futureEventSeed || '',
           confidence: confClamped,
+          editor: editorDecision
+            ? {
+                decision: editorDecision,
+                reason: editorReason || '',
+                reviewedAt: c.plan.editorReviewedAt || null,
+                model: c.plan.editorModel || null
+              }
+            : null,
           outline: Array.isArray(c.plan.outline) ? c.plan.outline.slice(0, 10) : [],
           draftArticle: c.plan.draftArticle || null
         }
@@ -2108,6 +2124,7 @@ export class FutureTimesPipeline {
         const planStories = Array.isArray(plan?.stories) ? plan.stories : [];
         const byId = new Map(planStories.map((s) => [String(s?.storyId || '').trim(), s]));
         const keySet = new Set((Array.isArray(plan?.keyStoryIds) ? plan.keyStoryIds : []).map((s) => String(s || '').trim()));
+        const latestDraftById = new Map();
 
         const generatedAt = isoNow();
         const model = String(plan?.model || config.model || '').trim() || config.model;
@@ -2194,6 +2211,7 @@ export class FutureTimesPipeline {
 
             // Pre-populate the render cache so this story loads instantly.
             this.storeRendered(storyId, articleJson, { curationGeneratedAt: generatedAt });
+            latestDraftById.set(storyId, { title, dek, body: draftBody });
             if (key) keyStories++;
           }
 
@@ -2268,6 +2286,7 @@ export class FutureTimesPipeline {
               yearsForward
             };
             this.storeRendered(sid, backfilledArticle, { curationGeneratedAt: generatedAt });
+            latestDraftById.set(sid, { title, dek, body: draft.body });
 
             // Update the story_curations row with the backfilled article
             const existingRow = this.db.prepare('SELECT plan_json FROM story_curations WHERE story_id=? AND day=? AND years_forward=?').get(sid, normalized, yearsForward);
@@ -2278,6 +2297,146 @@ export class FutureTimesPipeline {
                 .run(safeJson(existingPlan, {}), safeJson(backfilledArticle, {}), sid, normalized, yearsForward);
             }
           }
+        }
+
+        // ── Future-lens editorial gate (Opus 4.6): approve/revise/reject story plausibility ──
+        try {
+          const editorStories = candidates.map((candidate) => {
+            const storyId = String(candidate.storyId || '').trim();
+            if (!storyId) return null;
+            const entry = byId.get(storyId) || {};
+            const draft = latestDraftById.get(storyId);
+            const title = String(draft?.title || entry.curatedTitle || candidate.title || '').trim();
+            const dek = String(draft?.dek || entry.curatedDek || candidate.dek || '').trim();
+            const body = String(draft?.body || entry?.draftArticle?.body || '').trim();
+            const pack = candidate.evidencePack || {};
+            const evidence = Array.isArray(pack.citations)
+              ? pack.citations.slice(0, 2).map((c) => String(c?.title || '').trim()).filter(Boolean)
+              : [];
+            if (!title || !dek) return null;
+            return {
+              storyId,
+              section: candidate.section,
+              rank: candidate.rank,
+              topicLabel: String(candidate.topicLabel || pack?.topic?.label || '').trim(),
+              title,
+              dek,
+              body,
+              evidence
+            };
+          }).filter(Boolean);
+
+          this.traceEvent(normalized, 'curate.editor.start', {
+            yearsForward,
+            stories: editorStories.length
+          });
+
+          const editorReview = await reviewEditionWithFutureEditor({
+            day: normalized,
+            yearsForward,
+            editionDate,
+            stories: editorStories,
+            config
+          });
+
+          const decisions = Array.isArray(editorReview?.stories) ? editorReview.stories : [];
+          let reviewedCount = 0;
+          let revisedCount = 0;
+          let rejectedCount = 0;
+          const reviewedAt = isoNow();
+          const updateRow = this.db.prepare(`
+            UPDATE story_curations
+            SET plan_json=?, article_json=?
+            WHERE story_id=? AND day=? AND years_forward=?;
+          `);
+
+          for (const decisionEntry of decisions) {
+            const storyId = String(decisionEntry?.storyId || '').trim();
+            if (!storyId) continue;
+            const existingRow = this.db
+              .prepare('SELECT plan_json, article_json FROM story_curations WHERE story_id=? AND day=? AND years_forward=? LIMIT 1')
+              .get(storyId, normalized, yearsForward);
+            if (!existingRow) continue;
+
+            const existingPlan = safeParseJson(existingRow.plan_json, {});
+            const existingArticle = existingRow.article_json ? safeParseJson(existingRow.article_json, null) : null;
+            const decision = String(decisionEntry?.decision || 'approve').trim().toLowerCase();
+            const nextDecision =
+              decision === 'reject' || decision === 'rejected'
+                ? 'reject'
+                : decision === 'revise' || decision === 'rewrite'
+                  ? 'revise'
+                  : 'approve';
+            const reason = String(decisionEntry?.reason || '').trim();
+            const revisedTitle = String(decisionEntry?.title || '').trim();
+            const revisedDek = String(decisionEntry?.dek || '').trim();
+            const revisedBody = String(decisionEntry?.body || '').trim();
+
+            existingPlan.editorDecision = nextDecision;
+            existingPlan.editorReason = reason;
+            existingPlan.editorReviewedAt = reviewedAt;
+            existingPlan.editorModel = String(editorReview?.model || 'claude-opus-4-6');
+
+            if (nextDecision === 'reject') {
+              existingPlan.key = false;
+              existingPlan.hero = false;
+              rejectedCount++;
+            } else {
+              if (revisedTitle) {
+                existingPlan.curatedTitle = revisedTitle;
+                if (existingPlan?.draftArticle && typeof existingPlan.draftArticle === 'object') {
+                  existingPlan.draftArticle.title = revisedTitle;
+                }
+                if (existingArticle && typeof existingArticle === 'object') {
+                  existingArticle.title = revisedTitle;
+                }
+              }
+              if (revisedDek) {
+                existingPlan.curatedDek = revisedDek;
+                if (existingPlan?.draftArticle && typeof existingPlan.draftArticle === 'object') {
+                  existingPlan.draftArticle.dek = revisedDek;
+                }
+                if (existingArticle && typeof existingArticle === 'object') {
+                  existingArticle.dek = revisedDek;
+                }
+              }
+              if (revisedBody && revisedBody.length > 120) {
+                if (!existingPlan.draftArticle || typeof existingPlan.draftArticle !== 'object') {
+                  existingPlan.draftArticle = {};
+                }
+                existingPlan.draftArticle.body = revisedBody;
+                if (existingArticle && typeof existingArticle === 'object') {
+                  existingArticle.body = revisedBody;
+                }
+              }
+              if (nextDecision === 'revise') revisedCount++;
+            }
+
+            updateRow.run(
+              safeJson(existingPlan, {}),
+              existingArticle ? safeJson(existingArticle, {}) : null,
+              storyId,
+              normalized,
+              yearsForward
+            );
+
+            if (existingArticle && typeof existingArticle === 'object' && String(existingArticle.body || '').trim().length > 100) {
+              this.storeRendered(storyId, existingArticle, { curationGeneratedAt: generatedAt });
+            }
+            reviewedCount++;
+          }
+
+          this.traceEvent(normalized, 'curate.editor.end', {
+            yearsForward,
+            reviewed: reviewedCount,
+            revised: revisedCount,
+            rejected: rejectedCount
+          });
+        } catch (err) {
+          this.traceEvent(normalized, 'curate.editor.error', {
+            yearsForward,
+            error: String(err?.message || err)
+          });
         }
 
         editionCount++;
