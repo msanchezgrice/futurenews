@@ -539,6 +539,43 @@ function filterEditionToPublishedArticles(payload, options = {}) {
     }
   }
 
+  if (candidates.length < MIN_PUBLISHED_STORIES && resolvedDay && Number.isFinite(resolvedYears)) {
+    const rows = pipeline.db.prepare(`
+      SELECT s.story_id, s.section, s.rank, e.day AS source_day
+      FROM editions e
+      JOIN edition_stories s ON s.edition_id = e.edition_id
+      WHERE e.years_forward = ? AND e.day < ?
+      ORDER BY e.day DESC, s.section ASC, s.rank ASC
+      LIMIT 320;
+    `).all(resolvedYears, resolvedDay);
+
+    for (const row of rows || []) {
+      if (candidates.length >= MIN_PUBLISHED_STORIES * 2) break;
+      const id = String(row?.story_id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      const story = pipeline.getStory(id);
+      if (!story) continue;
+      const editionDate = String(story?.evidencePack?.editionDate || '').trim();
+      const sourceDay = String(row?.source_day || '').trim();
+      const seedArticle = {
+        id,
+        section: String(row?.section || story.section || 'World'),
+        rank: Number(row?.rank),
+        title: String(story?.headlineSeed || '').trim(),
+        dek: String(story?.dekSeed || '').trim(),
+        meta: editionDate
+          ? `${story.section} • ${editionDate}`
+          : sourceDay
+            ? `${story.section} • source ${sourceDay}`
+            : String(story?.section || '').trim()
+      };
+      const candidate = buildCandidate(seedArticle, story);
+      if (!candidate) continue;
+      seenIds.add(id);
+      candidates.push(candidate);
+    }
+  }
+
   const selected = selectBalancedPublishedStories(candidates, {
     minTotal: MIN_PUBLISHED_STORIES,
     minPerSection: MIN_STORIES_PER_SECTION
