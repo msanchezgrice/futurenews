@@ -962,6 +962,56 @@ async function buildPublishedEdition(day, yearsForward, payload) {
   return published;
 }
 
+async function resolveReplacementArticle({ day, yearsForward, excludedStoryId = '', preferredSection = '' } = {}) {
+  const normalizedDay = normalizeDay(day) || formatDay();
+  const y = clampYears(yearsForward || EDITION_YEARS);
+  const base = pipeline.getEdition(normalizedDay, y, { applyCuration: false });
+  if (!base) return null;
+  const published = await buildPublishedEdition(normalizedDay, y, base);
+  const list = Array.isArray(published?.articles) ? published.articles : [];
+  if (!list.length) return null;
+
+  const excluded = String(excludedStoryId || '').trim();
+  const section = String(preferredSection || '').trim();
+  const pick =
+    (section
+      ? list.find((entry) => String(entry?.id || '').trim() !== excluded && String(entry?.section || '').trim() === section)
+      : null) ||
+    list.find((entry) => String(entry?.id || '').trim() !== excluded) ||
+    null;
+  if (!pick) return null;
+
+  const replacementStory = pipeline.getStory(String(pick.id || '').trim());
+  if (!replacementStory) return null;
+
+  let article = getPreRenderedArticle(replacementStory.storyId, replacementStory);
+  if (!article) {
+    const seed = buildSeedArticleFromStory(replacementStory);
+    if (!isPublishReadyArticle(seed) || !isStoryFuturePublishable(replacementStory, seed)) return null;
+    pipeline.storeRendered(replacementStory.storyId, seed, { curationGeneratedAt: replacementStory?.curation?.generatedAt || null });
+    article = seed;
+  }
+  const merged = {
+    ...article,
+    id: String(pick.id || article.id || '').trim(),
+    section: String(pick.section || article.section || '').trim() || article.section,
+    title: String(pick.title || article.title || '').trim() || article.title,
+    dek: String(pick.dek || article.dek || '').trim() || article.dek,
+    meta: String(pick.meta || article.meta || '').trim() || article.meta,
+    image: sanitizeFinalImage(pick.image || article.image || '')
+  };
+
+  try {
+    return await decorateArticlePayload(merged, {
+      day: normalizedDay,
+      yearsForward: y,
+      storyId: replacementStory.storyId
+    });
+  } catch {
+    return merged;
+  }
+}
+
 function splitToChunks(text, size) {
   const normalized = String(text || '');
   if (!normalized) return [];
@@ -3991,16 +4041,73 @@ async function requestHandler(req, res) {
         return;
       }
       if (!isStoryFuturePublishable(story)) {
+        const replacement = await resolveReplacementArticle({
+          day: normalizeDay(url.searchParams.get('day') || '') || story.day || '',
+          yearsForward: clampYears(url.searchParams.get('years') || String(story.yearsForward || EDITION_YEARS)),
+          excludedStoryId: storyId,
+          preferredSection: story.section
+        });
+        if (replacement) {
+          sendJson(res, {
+            status: 'ready',
+            filtered: true,
+            replacedStoryId: storyId,
+            article: replacement
+          });
+          return;
+        }
         sendJson(res, { status: 'filtered', storyId, error: 'story_not_future_aligned' }, 410);
         return;
       }
 
       const preRendered = getPreRenderedArticle(storyId, story);
       if (!preRendered) {
+        const seed = buildSeedArticleFromStory(story);
+        if (isPublishReadyArticle(seed) && isStoryFuturePublishable(story, seed)) {
+          pipeline.storeRendered(storyId, seed, { curationGeneratedAt: story?.curation?.generatedAt || null });
+          let article = seed;
+          try {
+            article = await decorateArticlePayload(seed, { day: story.day, yearsForward: story.yearsForward, storyId });
+          } catch {
+            // best effort
+          }
+          sendJson(res, { status: 'ready', article });
+          return;
+        }
+        const replacement = await resolveReplacementArticle({
+          day: normalizeDay(url.searchParams.get('day') || '') || story.day || '',
+          yearsForward: clampYears(url.searchParams.get('years') || String(story.yearsForward || EDITION_YEARS)),
+          excludedStoryId: storyId,
+          preferredSection: story.section
+        });
+        if (replacement) {
+          sendJson(res, {
+            status: 'ready',
+            filtered: true,
+            replacedStoryId: storyId,
+            article: replacement
+          });
+          return;
+        }
         sendJson(res, { status: 'not_ready', storyId, error: 'article_not_pre_rendered' }, 409);
         return;
       }
       if (!isStoryFuturePublishable(story, preRendered)) {
+        const replacement = await resolveReplacementArticle({
+          day: normalizeDay(url.searchParams.get('day') || '') || story.day || '',
+          yearsForward: clampYears(url.searchParams.get('years') || String(story.yearsForward || EDITION_YEARS)),
+          excludedStoryId: storyId,
+          preferredSection: story.section
+        });
+        if (replacement) {
+          sendJson(res, {
+            status: 'ready',
+            filtered: true,
+            replacedStoryId: storyId,
+            article: replacement
+          });
+          return;
+        }
         sendJson(res, { status: 'filtered', storyId, error: 'story_not_future_aligned' }, 410);
         return;
       }
