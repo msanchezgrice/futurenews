@@ -232,6 +232,17 @@ function resolveTargetYear(story, day, yearsForward) {
   return baselineYear + offset;
 }
 
+function shiftDay(dayValue, deltaDays = 0) {
+  const normalized = normalizeDay(dayValue);
+  if (!normalized) return '';
+  const delta = Number(deltaDays);
+  if (!Number.isFinite(delta) || delta === 0) return normalized;
+  const date = new Date(`${normalized}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return normalized;
+  date.setUTCDate(date.getUTCDate() + Math.trunc(delta));
+  return formatDay(date);
+}
+
 function isLegacyYearTitle(title, targetYear) {
   if (!Number.isFinite(targetYear)) return false;
   const years = extractYears(title);
@@ -698,6 +709,7 @@ async function recoverHeroImages(day, yearsForward, published = null) {
       includeGlobalHero: true
     });
     const publishedArticles = Array.isArray(published?.articles) ? published.articles : [];
+    const publishedHeroId = String(published?.heroId || published?.heroStoryId || '').trim();
     const extraTargets = [];
     for (const article of publishedArticles) {
       if (extraTargets.length >= 16) break;
@@ -707,7 +719,33 @@ async function recoverHeroImages(day, yearsForward, published = null) {
       extraTargets.push({ storyId: id, section: String(article?.section || '').trim() });
     }
     const extra = [];
+    const primaryTarget = (() => {
+      if (publishedHeroId) {
+        const heroArticle = publishedArticles.find((entry) => String(entry?.id || '').trim() === publishedHeroId);
+        if (heroArticle && !isFinalRenderedImage(heroArticle?.image || '')) {
+          return { storyId: publishedHeroId, section: String(heroArticle?.section || '').trim() };
+        }
+      }
+      return extraTargets[0] || null;
+    })();
+    if (primaryTarget) {
+      try {
+        const primary = await enqueueSingleStoryHeroJob({
+          day,
+          pipeline,
+          storyId: primaryTarget.storyId,
+          section: primaryTarget.section,
+          yearsForward,
+          force: true,
+          priority: 1
+        });
+        extra.push({ primary: true, ...primary });
+      } catch (err) {
+        extra.push({ primary: true, ok: false, storyId: primaryTarget.storyId, error: String(err?.message || err) });
+      }
+    }
     for (const target of extraTargets) {
+      if (primaryTarget && target.storyId === primaryTarget.storyId) continue;
       try {
         const result = await enqueueSingleStoryHeroJob({
           day,
@@ -715,7 +753,8 @@ async function recoverHeroImages(day, yearsForward, published = null) {
           storyId: target.storyId,
           section: target.section,
           yearsForward,
-          force: false
+          force: false,
+          priority: 5
         });
         extra.push(result);
       } catch (err) {
@@ -2973,7 +3012,7 @@ async function requestHandler(req, res) {
       const yearsForward = clampYears(url.searchParams.get('years') || String(EDITION_YEARS));
       const limit = Math.max(1, Math.min(730, Number(url.searchParams.get('limit') || 120)));
       const today = formatDay();
-      const rows = pipeline.db
+      const queryDays = () => pipeline.db
         .prepare(`
           SELECT day
           FROM (
@@ -2990,7 +3029,24 @@ async function requestHandler(req, res) {
           LIMIT ?;
         `)
         .all(yearsForward, today, yearsForward, today, today, today, limit);
-      const days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
+
+      let rows = queryDays();
+      let days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
+
+      if (yearsForward === EDITION_YEARS && days.length < 3) {
+        const warmTargets = [today, shiftDay(today, -1), shiftDay(today, -2)].filter(Boolean);
+        for (const candidateDay of warmTargets) {
+          if (days.includes(candidateDay)) continue;
+          try {
+            await pipeline.ensureDayBuilt(candidateDay);
+          } catch {
+            // best effort: continue with what is already available
+          }
+        }
+        rows = queryDays();
+        days = (rows || []).map((row) => String(row?.day || '').trim()).filter(Boolean);
+      }
+
       sendJson(res, {
         yearsForward,
         today,

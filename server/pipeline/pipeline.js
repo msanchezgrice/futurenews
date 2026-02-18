@@ -502,7 +502,7 @@ export class FutureTimesPipeline {
     this.sourcesFile = options.sourcesFile || DEFAULT_SOURCES_FILE;
     this.db = null;
     this.entityDicts = null;
-    this.refreshInFlight = null;
+    this.refreshInFlightByDay = new Map();
     this.lastRefresh = null;
     this.curationInFlight = null;
     this.lastCuration = null;
@@ -811,9 +811,13 @@ export class FutureTimesPipeline {
       };
     });
 
-    // Preserve the full edition. (Curation may cover only a subset; we still want one
-    // rank-1 story per section for the newspaper and hero images.)
-    const finalArticles = patchedArticles;
+    // Only include articles the LLM actually curated (confidence > 0).
+    // Uncurated articles have garbage auto-generated titles and no body.
+    const curatedArticles = patchedArticles.filter((a) => {
+      const conf = Number(a.confidence);
+      return conf > 0;
+    });
+    const finalArticles = curatedArticles.length > 0 ? curatedArticles : patchedArticles;
 
     const resolvedHeroId = heroOverride || base.heroId || base.heroStoryId || (finalArticles[0] ? finalArticles[0].id : null);
     const dayCuration = this.getDayCuration(base.day);
@@ -1147,11 +1151,12 @@ export class FutureTimesPipeline {
   async refresh(options = {}) {
     const day = normalizeDay(options.day) || formatDay();
     const force = options.force === true;
-    if (this.refreshInFlight) {
-      return this.refreshInFlight;
+    const inflightKey = day;
+    if (this.refreshInFlightByDay.has(inflightKey)) {
+      return this.refreshInFlightByDay.get(inflightKey);
     }
 
-    this.refreshInFlight = (async () => {
+    const promise = (async () => {
       const startedAtMs = Date.now();
       this.traceEvent(day, 'refresh.start', { day, force });
       const fetchedAt = isoNow();
@@ -1307,12 +1312,12 @@ export class FutureTimesPipeline {
           editions: status.editions
         }
       });
-    })()
-      .finally(() => {
-        this.refreshInFlight = null;
-      });
+    })().finally(() => {
+      this.refreshInFlightByDay.delete(inflightKey);
+    });
 
-    return this.refreshInFlight;
+    this.refreshInFlightByDay.set(inflightKey, promise);
+    return promise;
   }
 
   processSignalsForDay(day) {
@@ -1684,7 +1689,7 @@ export class FutureTimesPipeline {
             title: headlineSeed,
             dek: dekSeed,
             meta,
-            image: 'assets/img/humanoids-labor-market.svg',
+            image: '',
             prompt: `Editorial photo illustration of: ${topic.label}. Newspaper photography style. Dated ${editionDate}.`,
             evidencePack
           });
@@ -1886,7 +1891,7 @@ export class FutureTimesPipeline {
         title: headline,
         dek,
         meta,
-        image: 'assets/img/humanoids-labor-market.svg',
+        image: '',
         prompt: `Futuristic editorial illustration: ${st.label} in ${targetYear}. ${st.category || 'AI'} theme. Newspaper photography style.`,
         evidencePack
       });
@@ -2168,7 +2173,7 @@ export class FutureTimesPipeline {
               title,
               dek,
               meta,
-              image: 'assets/img/humanoids-labor-market.svg',
+              image: '',
               body: draftBody,
               signals,
               markets,
@@ -2253,7 +2258,7 @@ export class FutureTimesPipeline {
               title,
               dek,
               meta: `${candidate.section} • ${editionDate}`,
-              image: 'assets/img/humanoids-labor-market.svg',
+              image: '',
               body: draft.body,
               signals: Array.isArray(pack.signals) ? pack.signals : [],
               markets: Array.isArray(pack.markets) ? pack.markets : [],
@@ -2542,7 +2547,7 @@ export class FutureTimesPipeline {
           title,
           dek,
           meta: `${candidate.section} • ${editionDate}`,
-          image: 'assets/img/humanoids-labor-market.svg',
+          image: '',
           body: draftBody,
           signals: Array.isArray(pack.signals) ? pack.signals : [],
           markets: Array.isArray(pack.markets) ? pack.markets : [],

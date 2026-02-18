@@ -458,7 +458,7 @@ export async function runImageWorker({ limit = 3, maxMs = 220000, day = null } =
   return { ok: true, processed, succeeded, failed, jobs };
 }
 
-export async function enqueueSingleStoryHeroJob({ day, pipeline, storyId, section, yearsForward = 5, force = false } = {}) {
+export async function enqueueSingleStoryHeroJob({ day, pipeline, storyId, section, yearsForward = 5, force = false, priority = 10 } = {}) {
   const flags = getFutureImagesFlags();
   if (!flags.imagesEnabled || !flags.storyHeroEnabled) {
     return { ok: false, error: 'disabled', detail: 'Set FT_IMAGES_ENABLED=true and FT_IMAGES_STORY_HERO_ENABLED=true' };
@@ -506,7 +506,7 @@ export async function enqueueSingleStoryHeroJob({ day, pipeline, storyId, sectio
     provider: resolveDefaultProvider().provider,
     model: resolveDefaultProvider().model,
     promptJson,
-    priority: 10
+    priority: Number.isFinite(Number(priority)) ? Number(priority) : 10
   });
   if (!enq || enq.ok !== true) {
     return { ok: false, error: enq?.error || 'enqueue_failed', detail: enq?.detail || null };
