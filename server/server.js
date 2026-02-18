@@ -733,6 +733,18 @@ function hasHeroWithFinalImage(payload) {
   return Boolean(hero && isFinalRenderedImage(hero.image));
 }
 
+function hasCurationCoverage(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  if (String(payload?.curationGeneratedAt || '').trim()) return true;
+  const articles = Array.isArray(payload?.articles) ? payload.articles : [];
+  return articles.some((entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    if (Number(entry.confidence) > 0) return true;
+    if (String(entry?.curation?.generatedAt || '').trim()) return true;
+    return false;
+  });
+}
+
 async function recoverHeroImages(day, yearsForward, published = null) {
   const flags = getFutureImagesFlags();
   if (!flags.imagesEnabled || !flags.storyHeroEnabled) return { ok: false, skipped: true, reason: 'images_disabled' };
@@ -842,6 +854,51 @@ async function buildPublishedEdition(day, yearsForward, payload) {
   };
 
   let published = await decorate(payload);
+  const ensureCuratedBootstrap = async () => {
+    const bootstrapKey = `${day}|y${yearsForward}|curation-bootstrap`;
+    const nowMs = Date.now();
+    const lastAttemptMs = Number(editionRecoveryAttempts.get(bootstrapKey) || 0);
+    if (lastAttemptMs && nowMs - lastAttemptMs < EDITION_RECOVERY_COOLDOWN_MS) {
+      return;
+    }
+    editionRecoveryAttempts.set(bootstrapKey, nowMs);
+
+    let firstResult = null;
+    try {
+      firstResult = await pipeline.curateDay(day, { force: false });
+    } catch {
+      // best effort
+    }
+    try {
+      prewarmRenderCacheForDay(day, [yearsForward]);
+    } catch {
+      // best effort
+    }
+    let rehydrated = pipeline.getEdition(day, yearsForward, { applyCuration: false });
+    if (rehydrated) {
+      published = await decorate(rehydrated);
+    }
+    if (hasCurationCoverage(published)) return;
+
+    const skippedReason = String(firstResult?.reason || '');
+    if (skippedReason === 'story_curations_present' || skippedReason === 'already_curated') {
+      try {
+        await pipeline.curateDay(day, { force: true });
+        prewarmRenderCacheForDay(day, [yearsForward]);
+        rehydrated = pipeline.getEdition(day, yearsForward, { applyCuration: false });
+        if (rehydrated) {
+          published = await decorate(rehydrated);
+        }
+      } catch {
+        // keep existing payload
+      }
+    }
+  };
+
+  if ((published?.articles || []).length > 0 && !hasCurationCoverage(published)) {
+    await ensureCuratedBootstrap();
+  }
+
   if ((published?.articles || []).length > 0) {
     if (hasHeroWithFinalImage(published)) return published;
     await recoverHeroImages(day, yearsForward, published);

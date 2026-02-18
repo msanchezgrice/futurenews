@@ -1111,7 +1111,14 @@
 
     const normalizedSection = normalizeSection(section);
     const resolvedHeroId = heroId || payload.heroId || (articles[0] ? articles[0].id : null);
-    const candidates = articles.filter((article) => article.id !== resolvedHeroId && !shownIds.has(article.id));
+    const sectionScoped = normalizedSection === SECTION_ALL
+      ? articles
+      : articles.filter((article) => normalizeSection(article.section || '') === normalizedSection);
+    let candidates = sectionScoped.filter((article) => article.id !== resolvedHeroId && !shownIds.has(article.id));
+    if (!candidates.length && normalizedSection !== SECTION_ALL) {
+      // If a section is extremely thin, fall back to cross-section stories rather than showing empty rail.
+      candidates = articles.filter((article) => article.id !== resolvedHeroId && !shownIds.has(article.id));
+    }
     if (!candidates.length) {
       container.innerHTML = '<div class="small">No more stories in this edition.</div>';
       return;
