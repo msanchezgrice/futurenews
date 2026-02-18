@@ -662,7 +662,7 @@ function hasHeroWithFinalImage(payload) {
   return Boolean(hero && isFinalRenderedImage(hero.image));
 }
 
-async function recoverHeroImages(day, yearsForward) {
+async function recoverHeroImages(day, yearsForward, published = null) {
   const flags = getFutureImagesFlags();
   if (!flags.imagesEnabled || !flags.storyHeroEnabled) return { ok: false, skipped: true, reason: 'images_disabled' };
   if (Number(yearsForward) !== 5) return { ok: false, skipped: true, reason: 'unsupported_years_forward' };
@@ -683,12 +683,41 @@ async function recoverHeroImages(day, yearsForward) {
       force: false,
       includeGlobalHero: true
     });
+    const publishedArticles = Array.isArray(published?.articles) ? published.articles : [];
+    const extraTargets = [];
+    for (const article of publishedArticles) {
+      if (extraTargets.length >= 16) break;
+      const id = String(article?.id || '').trim();
+      if (!id) continue;
+      if (isFinalRenderedImage(article?.image || '')) continue;
+      extraTargets.push({ storyId: id, section: String(article?.section || '').trim() });
+    }
+    const extra = [];
+    for (const target of extraTargets) {
+      try {
+        const result = await enqueueSingleStoryHeroJob({
+          day,
+          pipeline,
+          storyId: target.storyId,
+          section: target.section,
+          yearsForward,
+          force: false
+        });
+        extra.push(result);
+      } catch (err) {
+        extra.push({ ok: false, storyId: target.storyId, error: String(err?.message || err) });
+      }
+    }
+    const requestedLimit = Math.max(
+      HERO_IMAGE_RECOVERY_LIMIT,
+      Math.min(24, (Number(enqueue?.queued || 0) || 0) + extraTargets.length)
+    );
     const worker = await runImageWorker({
       day,
-      limit: HERO_IMAGE_RECOVERY_LIMIT,
+      limit: requestedLimit,
       maxMs: HERO_IMAGE_RECOVERY_MAX_MS
     });
-    return { ok: true, enqueue, worker };
+    return { ok: true, enqueue, extra, worker };
   } catch (err) {
     return { ok: false, skipped: true, reason: String(err?.message || err) };
   }
@@ -706,7 +735,16 @@ async function buildPublishedEdition(day, yearsForward, payload) {
   };
 
   let published = await decorate(payload);
-  if ((published?.articles || []).length > 0) return published;
+  if ((published?.articles || []).length > 0) {
+    if (hasHeroWithFinalImage(published)) return published;
+    await recoverHeroImages(day, yearsForward, published);
+    const rehydrated = pipeline.getEdition(day, yearsForward, { applyCuration: false });
+    if (rehydrated) {
+      const refreshedPublished = await decorate(rehydrated);
+      if ((refreshedPublished?.articles || []).length > 0) return refreshedPublished;
+    }
+    return published;
+  }
 
   const recoveryKey = `${day}|y${yearsForward}`;
   const nowMs = Date.now();
@@ -750,7 +788,7 @@ async function buildPublishedEdition(day, yearsForward, payload) {
   }
 
   if (!hasHeroWithFinalImage(published)) {
-    await recoverHeroImages(day, yearsForward);
+    await recoverHeroImages(day, yearsForward, published);
     const rehydrated = pipeline.getEdition(day, yearsForward, { applyCuration: false });
     if (rehydrated) {
       published = await decorate(rehydrated);
