@@ -446,45 +446,47 @@ function filterEditionToPublishedArticles(payload, options = {}) {
   if (!base) return payload;
   const articles = Array.isArray(base.articles) ? base.articles : [];
   if (!articles.length) return { ...base, articles: [], heroId: null, heroStoryId: null };
+  const resolvedDay = normalizeDay(day || base.day || '');
+  const resolvedYears = Number.isFinite(yearsForward) ? clampYears(yearsForward) : null;
 
   const candidates = [];
-  for (const article of articles) {
-    const id = String(article?.id || '').trim();
-    if (!id) continue;
-
-    const story = pipeline.getStory(id);
+  const seenIds = new Set();
+  const buildCandidate = (articleInput, storyInput) => {
+    const id = String(articleInput?.id || '').trim();
+    if (!id) return null;
+    const story = storyInput || pipeline.getStory(id);
     const rendered = getPreRenderedArticle(id, story);
-    const targetYear = resolveTargetYear(story, day, yearsForward);
+    const targetYear = resolveTargetYear(story, resolvedDay, resolvedYears);
 
-    const rawTitle = String(rendered?.title || article?.title || story?.headlineSeed || '').trim();
-    const rawDek = String(rendered?.dek || article?.dek || story?.dekSeed || '').trim();
-    const strict = Boolean(rendered && isFutureAlignedStory({ id, title: rawTitle, dek: rawDek }, story, { day, yearsForward }));
+    const rawTitle = String(rendered?.title || articleInput?.title || story?.headlineSeed || '').trim();
+    const rawDek = String(rendered?.dek || articleInput?.dek || story?.dekSeed || '').trim();
+    const strict = Boolean(rendered && isFutureAlignedStory({ id, title: rawTitle, dek: rawDek }, story, { day: resolvedDay, yearsForward: resolvedYears }));
 
     let title = rawTitle;
     let dek = rawDek;
-    if (!isFutureAlignedStory({ id, title, dek }, story, { day, yearsForward })) {
-      const fallback = buildFutureFallbackCopy(story, article, targetYear);
+    if (!isFutureAlignedStory({ id, title, dek }, story, { day: resolvedDay, yearsForward: resolvedYears })) {
+      const fallback = buildFutureFallbackCopy(story, articleInput, targetYear);
       title = String(fallback.title || title).trim();
       dek = String(fallback.dek || dek).trim();
     }
-    if (!title || title.length < 10 || !dek || dek.length < 20) continue;
+    if (!title || title.length < 10 || !dek || dek.length < 20) return null;
 
-    const section = String(article?.section || story?.section || 'World').trim() || 'World';
+    const section = String(articleInput?.section || story?.section || 'World').trim() || 'World';
     const rank = Number.isFinite(Number(story?.rank))
       ? Number(story.rank)
-      : Number.isFinite(Number(article?.rank))
-        ? Number(article.rank)
+      : Number.isFinite(Number(articleInput?.rank))
+        ? Number(articleInput.rank)
         : 9999;
     const editionDate = String(story?.evidencePack?.editionDate || '').trim();
-    const meta = String(rendered?.meta || article?.meta || (editionDate ? `${section} • ${editionDate}` : section)).trim();
+    const meta = String(rendered?.meta || articleInput?.meta || (editionDate ? `${section} • ${editionDate}` : section)).trim();
     const confidence = clampConfidence(
       rendered?.confidence,
-      clampConfidence(article?.confidence, clampConfidence(story?.curation?.confidence, 0))
+      clampConfidence(articleInput?.confidence, clampConfidence(story?.curation?.confidence, 0))
     );
-    const mergedImage = sanitizeFinalImage(rendered?.image || article?.image || '');
+    const mergedImage = sanitizeFinalImage(rendered?.image || articleInput?.image || '');
 
-    candidates.push({
-      ...article,
+    return {
+      ...articleInput,
       id,
       section,
       title,
@@ -494,7 +496,47 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       confidence,
       _strict: strict,
       _rank: rank
-    });
+    };
+  };
+
+  for (const article of articles) {
+    const id = String(article?.id || '').trim();
+    if (!id || seenIds.has(id)) continue;
+    const story = pipeline.getStory(id);
+    const candidate = buildCandidate(article, story);
+    if (!candidate) continue;
+    seenIds.add(id);
+    candidates.push(candidate);
+  }
+
+  if (candidates.length < MIN_PUBLISHED_STORIES && resolvedDay && Number.isFinite(resolvedYears)) {
+    const rows = pipeline.db.prepare(`
+      SELECT s.story_id, s.section, s.rank
+      FROM edition_stories s
+      JOIN editions e ON e.edition_id = s.edition_id
+      WHERE e.day = ? AND e.years_forward = ?
+      ORDER BY s.section ASC, s.rank ASC;
+    `).all(resolvedDay, resolvedYears);
+
+    for (const row of rows || []) {
+      const id = String(row?.story_id || '').trim();
+      if (!id || seenIds.has(id)) continue;
+      const story = pipeline.getStory(id);
+      if (!story) continue;
+      const editionDate = String(story?.evidencePack?.editionDate || '').trim();
+      const seedArticle = {
+        id,
+        section: String(row?.section || story.section || 'World'),
+        rank: Number(row?.rank),
+        title: String(story?.headlineSeed || '').trim(),
+        dek: String(story?.dekSeed || '').trim(),
+        meta: editionDate ? `${story.section} • ${editionDate}` : String(story?.section || '').trim()
+      };
+      const candidate = buildCandidate(seedArticle, story);
+      if (!candidate) continue;
+      seenIds.add(id);
+      candidates.push(candidate);
+    }
   }
 
   const selected = selectBalancedPublishedStories(candidates, {
