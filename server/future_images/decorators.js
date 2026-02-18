@@ -44,6 +44,24 @@ async function lookupStoryAssets(day, yearsForward, storyIds) {
   return map;
 }
 
+async function lookupStoryAssetsAnyDay(yearsForward, storyIds) {
+  const ids = Array.isArray(storyIds) ? storyIds.map((x) => String(x || '').trim()).filter(Boolean) : [];
+  if (!ids.length) return new Map();
+
+  const q = `
+    SELECT DISTINCT ON (story_id) story_id, blob_url, alt_text, created_at
+    FROM ft_image_assets
+    WHERE years_forward=$1 AND kind='story_section_hero' AND story_id = ANY($2::text[])
+    ORDER BY story_id, day DESC, created_at DESC;
+  `;
+  const resp = await pgQuery(q, [yearsForward, ids]);
+  const map = new Map();
+  for (const row of resp.rows || []) {
+    map.set(String(row.story_id || ''), { url: row.blob_url, alt: row.alt_text, createdAt: row.created_at });
+  }
+  return map;
+}
+
 async function lookupSingleStoryAsset(day, yearsForward, storyId) {
   const id = String(storyId || '').trim();
   if (!id) return null;
@@ -55,6 +73,21 @@ async function lookupSingleStoryAsset(day, yearsForward, storyId) {
     LIMIT 1;
   `;
   const resp = await pgQuery(q, [day, yearsForward, id]);
+  const row = resp.rows?.[0] || null;
+  return row ? { url: row.blob_url, alt: row.alt_text, createdAt: row.created_at } : null;
+}
+
+async function lookupSingleStoryAssetAnyDay(yearsForward, storyId) {
+  const id = String(storyId || '').trim();
+  if (!id) return null;
+  const q = `
+    SELECT blob_url, alt_text, created_at
+    FROM ft_image_assets
+    WHERE years_forward=$1 AND kind='story_section_hero' AND story_id=$2
+    ORDER BY day DESC, created_at DESC
+    LIMIT 1;
+  `;
+  const resp = await pgQuery(q, [yearsForward, id]);
   const row = resp.rows?.[0] || null;
   return row ? { url: row.blob_url, alt: row.alt_text, createdAt: row.created_at } : null;
 }
@@ -77,12 +110,15 @@ export async function decorateEditionPayload(payload, { day, yearsForward } = {}
   if (!schema.ok) return basePayload;
 
   const ids = baseArticles.map((a) => String(a?.id || '').trim()).filter(Boolean);
-  const assets = await lookupStoryAssets(day, yearsForward, ids);
-  if (!assets.size) return basePayload;
+  const [assets, assetsAnyDay] = await Promise.all([
+    lookupStoryAssets(day, yearsForward, ids),
+    lookupStoryAssetsAnyDay(yearsForward, ids)
+  ]);
+  if (!assets.size && !assetsAnyDay.size) return basePayload;
 
   const patched = baseArticles.map((a) => {
     const id = String(a?.id || '').trim();
-    const asset = id ? assets.get(id) : null;
+    const asset = id ? (assets.get(id) || assetsAnyDay.get(id)) : null;
     if (!asset || !asset.url) return a;
     return { ...a, image: asset.url };
   });
@@ -101,7 +137,7 @@ export async function decorateArticlePayload(article, { day, yearsForward, story
   const schema = await ensureFutureImagesSchema();
   if (!schema.ok) return baseArticle;
 
-  const asset = await lookupSingleStoryAsset(day, yearsForward, storyId);
+  const asset = await lookupSingleStoryAsset(day, yearsForward, storyId) || await lookupSingleStoryAssetAnyDay(yearsForward, storyId);
   if (!asset || !asset.url) return baseArticle;
 
   return { ...baseArticle, image: asset.url };
