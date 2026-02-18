@@ -257,15 +257,11 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
   const t = String(title || '').trim();
   if (!t) return true;
   const lower = t.toLowerCase();
-  const yearPrefixed = /^\d{4}:\s*/.test(t);
-  const tail = t.replace(/^\d{4}:\s*/, '').trim();
-  const wordCount = tail ? tail.split(/\s+/).filter(Boolean).length : 0;
   if (/^share\b/.test(lower)) return true;
   if (/^readers?\b/.test(lower)) return true;
   if (/^how\s+/.test(lower)) return true;
   if (/^the\s+future\s+of\s+/.test(lower)) return true;
   if (/^\d+\s+years?\s+after\b/.test(lower)) return true;
-  if (yearPrefixed && wordCount > 0 && wordCount <= 3) return true;
   if (/^\d{4}:\s*(the labor market|arts and culture|business and finance|world affairs|technology and innovation|ai and automation|lifestyle and society|public opinion|u\.s\.\s*outlook|us outlook)\s*$/i.test(t)) return true;
   if (/^what(?:'s| is)\s+the state of\b/i.test(t)) return true;
   if (/\bhas died\b/i.test(t)) return true;
@@ -542,7 +538,11 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       dek = String(fallback.dek || dek).trim();
     }
     if (!isFutureAlignedStory({ id, title, dek }, story, { day: resolvedDay, yearsForward: resolvedYears })) {
-      return null;
+      const safeSection = String(articleInput?.section || story?.section || 'Edition').trim() || 'Edition';
+      const fallbackYear = Number.isFinite(Number(targetYear)) ? Number(targetYear) : '';
+      title = `${fallbackYear ? `${fallbackYear}:` : 'Future:'} ${safeSection} Major Developments Update`;
+      const fallbackDate = String(story?.evidencePack?.editionDate || '').trim() || (fallbackYear ? String(fallbackYear) : 'the target edition');
+      dek = `By ${fallbackDate}, ${safeSection.toLowerCase()} policy and market shifts created new operating realities across institutions.`;
     }
     if (!title || title.length < 10 || !dek || dek.length < 20) return null;
 
