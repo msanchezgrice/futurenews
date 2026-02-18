@@ -278,10 +278,14 @@ function looksLikeLowFidelityFutureHeadline(title, targetYear) {
 function isFutureAlignedStory({ id, title, dek }, story, { day, yearsForward }) {
   const safeTitle = String(title || '').trim();
   if (!safeTitle) return false;
+  const safeDek = String(dek || '').trim();
 
   const targetYear = resolveTargetYear(story, day, yearsForward);
   if (isLegacyYearTitle(safeTitle, targetYear)) return false;
   if (looksLikeLowFidelityFutureHeadline(safeTitle, targetYear)) return false;
+  if (/^by\s+[a-z]+\s+\d{1,2},\s+\d{4},\s*[‘'"“]/i.test(safeDek)) return false;
+  if (/\b(he was the rock|friendship changed my life)\b/i.test(safeDek)) return false;
+  if (/\b\d+\s+years?\s+of\s+(camaraderie|friendship|legacy)\b/i.test(safeDek)) return false;
 
   const sid = String(id || '').toLowerCase();
   if (/(share-your|readers-on|review)/.test(sid)) {
