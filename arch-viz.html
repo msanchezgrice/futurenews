@@ -159,7 +159,7 @@
 <!-- ═══════════════════════════════════════════ -->
 <div class="section" id="overview">
   <h2><span class="num">01</span> System Overview</h2>
-  <p class="subtitle">A "future newspaper" — fetches real-world signals, clusters into topics, generates a +5-year edition, curates with Opus (extended thinking), and renders articles on-click via Anthropic Opus API. 9,402 lines of JS. Single dependency: <code>ws</code>.</p>
+  <p class="subtitle">A "future newspaper" — fetches real-world signals, clusters into topics, generates a +5-year edition, curates with Sonnet (extended thinking), and renders articles on-click via Anthropic Sonnet API. 9,402 lines of JS. Single dependency: <code>ws</code>.</p>
 
   <div class="stat-row">
     <div class="stat"><div class="val">9,402</div><div class="label">Lines of JS</div></div>
@@ -196,8 +196,8 @@
     <div class="card">
       <h3><span class="badge badge-purple">LLM</span> Three Touchpoints</h3>
       <ul>
-        <li><strong>Curation</strong> — Opus with extended thinking (10K budget). Writes all stories: headlines, deks, draftArticle, confidence scores</li>
-        <li><strong>Rendering</strong> — Opus 4.6 generates article body on-click via HTTP API (no WebSocket)</li>
+        <li><strong>Curation</strong> — Sonnet with extended thinking (10K budget). Writes all stories: headlines, deks, draftArticle, confidence scores</li>
+        <li><strong>Rendering</strong> — Sonnet 4.6 generates article body on-click via HTTP API (no WebSocket)</li>
         <li><strong>Images</strong> — DALL-E 3 generates hero images per story (1792×1024)</li>
       </ul>
       <p style="margin-top:8px">No mock fallback — curation requires <code>anthropic</code> or <code>openai</code> mode</p>
@@ -244,13 +244,13 @@
 
   <div class="file-tree">
 <span class="dir">server/</span>
-  <span class="file">server.js</span>        <span class="lines">2,745 lines</span> <span class="comment">— HTTP server, Opus article renderer, admin dashboard, article prompt builder</span>
+  <span class="file">server.js</span>        <span class="lines">2,745 lines</span> <span class="comment">— HTTP server, Sonnet article renderer, admin dashboard, article prompt builder</span>
   <span class="file">worker.js</span>        <span class="comment">— Scheduled daily pipeline runner (cron-style PIPELINE_DAILY_HHMM)</span>
   <span class="file">refresh.js</span>       <span class="comment">— One-shot pipeline refresh CLI</span>
   <span class="dir">pipeline/</span>
     <span class="file">pipeline.js</span>      <span class="lines">2,481 lines</span> <span class="comment">— FutureTimesPipeline class: fetch/classify/cluster/enrich/generate/curate/image-gen</span>
     <span class="file">curation.js</span>      <span class="lines">537 lines</span>  <span class="comment">— Curation: prompt builder, Anthropic API w/ extended thinking, JSON parsing</span>
-    <span class="file">opus-curator.js</span>  <span class="lines">584 lines</span>  <span class="comment">— Mock curator: deterministic curation templates, outline generation</span>
+    <span class="file">sonnet-curator.js</span>  <span class="lines">584 lines</span>  <span class="comment">— Mock curator: deterministic curation templates, outline generation</span>
     <span class="file">db.js</span>            <span class="lines">247 lines</span>  <span class="comment">— SQLite schema, migrations, 14 tables + 12 indices</span>
     <span class="file">rss.js</span>           <span class="comment">— RSS/Atom feed parser (regex-based, no XML lib)</span>
     <span class="file">polymarket.js</span>    <span class="comment">— Polymarket Gamma API client</span>
@@ -324,7 +324,7 @@
     <div class="flow-step" style="border-color:var(--pink)">
       <div class="step-num" style="color:var(--pink)">STAGE 7 (click)</div>
       <h4>Render</h4>
-      <p>→ <code>render_cache</code><br>Opus API on-click<br>HTTP polling (no WS)<br>+ DALL-E 3 images</p>
+      <p>→ <code>render_cache</code><br>Sonnet API on-click<br>HTTP polling (no WS)<br>+ DALL-E 3 images</p>
     </div>
   </div>
 
@@ -412,7 +412,7 @@
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--accent)">POST /api/article/:id</div>
         <span class="sm-arrow">→</span>
-        <div class="sm-state" style="border-color:var(--orange)">Opus generating</div>
+        <div class="sm-state" style="border-color:var(--orange)">Sonnet generating</div>
         <span class="sm-arrow">→</span>
         <div class="sm-state" style="border-color:var(--green)">complete</div>
       </div>
@@ -424,7 +424,7 @@
         <div class="sm-state" style="border-color:var(--red)">error (no fallback)</div>
       </div>
       <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">
-        If draftArticle body >200 chars → skip Opus, use curator's draft directly.<br>
+        If draftArticle body >200 chars → skip Sonnet, use curator's draft directly.<br>
         Client polls via HTTP (no WebSocket streaming).<br>
         Cache layers: Memory Map → SQLite render_cache → localStorage (20min TTL)
       </p>
@@ -433,11 +433,11 @@
     <div class="sm-group">
       <h4>Curation Mode</h4>
       <div style="font-family:var(--mono); font-size:12px; line-height:2;">
-        <div><span class="badge badge-purple">anthropic</span> Extended thinking (Opus) or temp 0.4 (Haiku). Fallback: Opus → Haiku on 404</div>
+        <div><span class="badge badge-purple">anthropic</span> Extended thinking (Sonnet) or temp 0.4 (Haiku). Fallback: Sonnet → Haiku on 404</div>
         <div><span class="badge badge-blue">openai</span> OpenAI Responses API (/v1/responses)</div>
         <div><span class="badge badge-red">error</span> Unknown mode throws — no mock fallback</div>
       </div>
-      <p style="margin-top:8px; font-size:12px; color:var(--fg-muted)">Extended thinking: budget 10K tokens for Opus models. Thinking traces logged but not stored.</p>
+      <p style="margin-top:8px; font-size:12px; color:var(--fg-muted)">Extended thinking: budget 10K tokens for Sonnet models. Thinking traces logged but not stored.</p>
     </div>
 
     <div class="sm-group">
@@ -455,7 +455,7 @@
       <p style="margin-top:10px; font-size:12px; color:var(--fg-muted)">
         Server: <code>PIPELINE_REFRESH_MS</code> = 3,600,000ms (1h interval)<br>
         Worker: <code>PIPELINE_DAILY_HHMM</code> = "05:30" (cron-style scheduled)<br>
-        Auto-curate: <code>OPUS_AUTO_CURATE</code> ≠ false → curate after each refresh
+        Auto-curate: <code>SONNET_AUTO_CURATE</code> ≠ false → curate after each refresh
       </p>
     </div>
 
@@ -644,9 +644,9 @@
     <thead><tr><th>Method</th><th>Route</th><th>Purpose</th><th>Auth</th></tr></thead>
     <tbody>
       <tr><td>GET</td><td><code>/api/ping</code></td><td>Health check</td><td>—</td></tr>
-      <tr><td>GET</td><td><code>/api/config</code></td><td>Server config (opus mode, features)</td><td>—</td></tr>
+      <tr><td>GET</td><td><code>/api/config</code></td><td>Server config (sonnet mode, features)</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/edition?years=&day=</code></td><td>Edition payload (stories, sections, hero)</td><td>—</td></tr>
-      <tr><td>GET/POST</td><td><code>/api/article/:id?years=&day=</code></td><td>GET: status/poll. POST: start Opus render job</td><td>—</td></tr>
+      <tr><td>GET/POST</td><td><code>/api/article/:id?years=&day=</code></td><td>GET: status/poll. POST: start Sonnet render job</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/pipeline/status</code></td><td>Pipeline health, counts, last refresh</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/pipeline/sources</code></td><td>All configured sources with status</td><td>—</td></tr>
       <tr><td>GET</td><td><code>/api/pipeline/standing-topics</code></td><td>Standing topics registry (?section= filter)</td><td>—</td></tr>
@@ -654,7 +654,7 @@
       <tr><td>GET</td><td><code>/api/pipeline/topic-evidence</code></td><td>Signal-to-topic evidence mapping</td><td>—</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/day-signal?day=&format=</code></td><td>Signal pack (HTML/JSON/pretty)</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/curate?force=</code></td><td>Trigger curation run</td><td>admin</td></tr>
-      <tr style="background:rgba(188,140,255,0.04)"><td>GET/POST</td><td><code>/api/admin/curator/runtime</code></td><td>Read/update Opus runtime config</td><td>admin</td></tr>
+      <tr style="background:rgba(188,140,255,0.04)"><td>GET/POST</td><td><code>/api/admin/curator/runtime</code></td><td>Read/update Sonnet runtime config</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/prerender</code></td><td>Pre-render articles for cache warming</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>POST</td><td><code>/api/admin/daily</code></td><td>Full pipeline refresh + curate (clears caches on force)</td><td>admin</td></tr>
       <tr style="background:rgba(188,140,255,0.04)"><td>GET</td><td><code>/api/admin/trace?day=</code></td><td>Event trace audit log</td><td>admin</td></tr>
@@ -672,7 +672,7 @@
 <div class="divider"></div>
 <div class="section" id="env">
   <h2><span class="num">07</span> Environment Variables</h2>
-  <p class="subtitle">All configuration via env vars, with runtime.json persistence for Opus settings.</p>
+  <p class="subtitle">All configuration via env vars, with runtime.json persistence for Sonnet settings.</p>
 
   <div class="env-grid">
     <div class="env-card">
@@ -687,21 +687,21 @@
       <div class="env-row"><span class="env-key">PIPELINE_REFRESH_MS</span><span class="env-val">3600000 (1h)</span></div>
     </div>
     <div class="env-card">
-      <h4>Opus Curation</h4>
-      <div class="env-row"><span class="env-key">OPUS_MODE</span><span class="env-val">anthropic | openai (no mock fallback)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
-      <div class="env-row"><span class="env-key">OPUS_API_KEY</span><span class="env-val">(Anthropic/OpenAI key)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_API_URL</span><span class="env-val">(custom endpoint)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_SYSTEM_PROMPT</span><span class="env-val">(override system prompt)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_MAX_TOKENS</span><span class="env-val">32000 (4K-64K)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_TIMEOUT_MS</span><span class="env-val">900000 (15min)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_KEY_STORIES_PER_EDITION</span><span class="env-val">1 (0-7)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_AUTO_CURATE</span><span class="env-val">true (curate after refresh)</span></div>
+      <h4>Sonnet Curation</h4>
+      <div class="env-row"><span class="env-key">SONNET_MODE</span><span class="env-val">anthropic | openai (no mock fallback)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_MODEL</span><span class="env-val">claude-sonnet-4-6</span></div>
+      <div class="env-row"><span class="env-key">SONNET_API_KEY</span><span class="env-val">(Anthropic/OpenAI key)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_API_URL</span><span class="env-val">(custom endpoint)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_SYSTEM_PROMPT</span><span class="env-val">(override system prompt)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_MAX_TOKENS</span><span class="env-val">32000 (4K-64K)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_TIMEOUT_MS</span><span class="env-val">900000 (15min)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_KEY_STORIES_PER_EDITION</span><span class="env-val">1 (0-7)</span></div>
+      <div class="env-row"><span class="env-key">SONNET_AUTO_CURATE</span><span class="env-val">true (curate after refresh)</span></div>
     </div>
     <div class="env-card">
       <h4>Article Rendering</h4>
       <div class="env-row"><span class="env-key">ANTHROPIC_API_KEY</span><span class="env-val">(required for article rendering)</span></div>
-      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
+      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-sonnet-4-6</span></div>
     </div>
     <div class="env-card">
       <h4>Image Generation + Worker</h4>
@@ -716,7 +716,7 @@
 <div class="divider"></div>
 <div class="section" id="llm">
   <h2><span class="num">08</span> LLM Usage Detail</h2>
-  <p class="subtitle">Three LLM touchpoints: curation (batch, daily, extended thinking), rendering (Opus on-click), image generation (DALL-E 3 per-story).</p>
+  <p class="subtitle">Three LLM touchpoints: curation (batch, daily, extended thinking), rendering (Sonnet on-click), image generation (DALL-E 3 per-story).</p>
 
   <div class="cards" style="grid-template-columns: 1fr 1fr 1fr;">
     <div class="card" style="border-color:var(--purple)">
@@ -724,12 +724,12 @@
       <p style="margin-bottom:12px">1 batch call per edition. ALL ~20 stories curated with full draftArticle + confidence.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code></td></tr>
-        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (configurable)</td></tr>
-        <tr><td>Thinking</td><td>Enabled, 10K budget (Opus)</td></tr>
+        <tr><td>Model</td><td>claude-sonnet-4-6 (configurable)</td></tr>
+        <tr><td>Thinking</td><td>Enabled, 10K budget (Sonnet)</td></tr>
         <tr><td>Temperature</td><td>N/A (thinking) or 0.4 (Haiku)</td></tr>
         <tr><td>Max tokens</td><td>32,000 (4K-64K)</td></tr>
         <tr><td>Timeout</td><td>900s (15min)</td></tr>
-        <tr><td>Fallback</td><td>Opus → Haiku on 404</td></tr>
+        <tr><td>Fallback</td><td>Sonnet → Haiku on 404</td></tr>
       </table>
       <div style="font-size:11px; margin-top:12px; color:var(--fg-muted);">
         <strong>Input (~3,200 tokens):</strong> editorial rules, prediction rules, AI extrapolation axes, all story candidates with citations<br>
@@ -739,11 +739,11 @@
     </div>
 
     <div class="card" style="border-color:var(--pink)">
-      <h3><span class="badge badge-pink">RENDERING</span> Anthropic Opus</h3>
+      <h3><span class="badge badge-pink">RENDERING</span> Anthropic Sonnet</h3>
       <p style="margin-bottom:12px">On-click via HTTP API. Skipped if draftArticle body already >200 chars.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code> (streaming)</td></tr>
-        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (<code>ARTICLE_MODEL</code>)</td></tr>
+        <tr><td>Model</td><td>claude-sonnet-4-6 (<code>ARTICLE_MODEL</code>)</td></tr>
         <tr><td>Timeout</td><td>120s</td></tr>
         <tr><td>Auth</td><td><code>ANTHROPIC_API_KEY</code></td></tr>
         <tr><td>Fallback</td><td>None (errors propagated)</td></tr>
@@ -777,9 +777,9 @@
 <div class="divider"></div>
 <div class="section" id="costs">
   <h2><span class="num">09</span> LLM Cost Estimates</h2>
-  <p class="subtitle">Opus 4.6: $15/M input, $75/M output. Haiku 4.5: $1/M, $5/M. DALL-E 3: $0.08/image. Extended thinking tokens charged at output rate.</p>
+  <p class="subtitle">Sonnet 4.6: $15/M input, $75/M output. Haiku 4.5: $1/M, $5/M. DALL-E 3: $0.08/image. Extended thinking tokens charged at output rate.</p>
 
-  <h3>Per Curation Call (Opus 4.6 with Extended Thinking)</h3>
+  <h3>Per Curation Call (Sonnet 4.6 with Extended Thinking)</h3>
   <table style="max-width:700px;">
     <thead><tr><th>Component</th><th>Tokens</th><th>Cost</th></tr></thead>
     <tbody>
@@ -790,7 +790,7 @@
     </tbody>
   </table>
 
-  <h3>Per Render Call (Opus 4.6)</h3>
+  <h3>Per Render Call (Sonnet 4.6)</h3>
   <table style="max-width:700px;">
     <thead><tr><th>Component</th><th>Tokens</th><th>Cost</th></tr></thead>
     <tbody>
@@ -804,17 +804,17 @@
   <h3>Monthly Cost Scenarios</h3>
 
   <div class="cost-row">
-    <div class="cost-label">Curation (Opus, 1/day)</div>
+    <div class="cost-label">Curation (Sonnet, 1/day)</div>
     <div class="cost-bar-bg"><div class="cost-bar" style="width:30%; background:var(--purple);">$39.60</div></div>
     <div class="cost-val">~$40/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">Curation (Opus, 1/day)</div>
+    <div class="cost-label">Curation (Sonnet, 1/day)</div>
     <div class="cost-bar-bg"><div class="cost-bar" style="width:7%; background:var(--accent);">$8</div></div>
     <div class="cost-val">~$8/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label">Rendering (Opus, 20 clicks/day)</div>
+    <div class="cost-label">Rendering (Sonnet, 20 clicks/day)</div>
     <div class="cost-bar-bg"><div class="cost-bar" style="width:12%; background:var(--pink);">$14.40</div></div>
     <div class="cost-val">~$14/mo</div>
   </div>
@@ -824,12 +824,12 @@
     <div class="cost-val">~$48/mo</div>
   </div>
   <div class="cost-row">
-    <div class="cost-label" style="color:var(--fg)"><strong>Full production (Opus)</strong></div>
+    <div class="cost-label" style="color:var(--fg)"><strong>Full production (Sonnet)</strong></div>
     <div class="cost-bar-bg"><div class="cost-bar" style="width:80%; background:linear-gradient(90deg, var(--purple), var(--pink), var(--yellow));">$102</div></div>
     <div class="cost-val"><strong>~$102/mo</strong></div>
   </div>
   <div class="cost-row">
-    <div class="cost-label" style="color:var(--fg)"><strong>Full production (Opus)</strong></div>
+    <div class="cost-label" style="color:var(--fg)"><strong>Full production (Sonnet)</strong></div>
     <div class="cost-bar-bg"><div class="cost-bar" style="width:55%; background:linear-gradient(90deg, var(--accent), var(--pink), var(--yellow));">$70</div></div>
     <div class="cost-val"><strong>~$70/mo</strong></div>
   </div>
@@ -837,11 +837,11 @@
   <h3>Cost Optimization Design</h3>
   <div class="cards" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
     <div class="card"><h3 style="font-size:13px;">Single edition</h3><p>Only +5y instead of 11 variants (0-10). 1 curation call/day instead of 11.</p></div>
-    <div class="card"><h3 style="font-size:13px;">All-story draftArticle</h3><p>Curation writes full body for every story. Most clicks skip Opus rendering entirely.</p></div>
+    <div class="card"><h3 style="font-size:13px;">All-story draftArticle</h3><p>Curation writes full body for every story. Most clicks skip Sonnet rendering entirely.</p></div>
     <div class="card"><h3 style="font-size:13px;">Batch curation</h3><p>~20 stories in 1 API call, not 20 separate calls.</p></div>
     <div class="card"><h3 style="font-size:13px;">Extended thinking</h3><p>10K budget for better predictions. Thinking traces logged but not persisted.</p></div>
     <div class="card"><h3 style="font-size:13px;">3-layer render cache</h3><p>Memory Map → SQLite → localStorage. Never re-render same article.</p></div>
-    <div class="card"><h3 style="font-size:13px;">Model fallback chain</h3><p>Opus → Haiku on 404. Graceful degradation.</p></div>
+    <div class="card"><h3 style="font-size:13px;">Model fallback chain</h3><p>Sonnet → Haiku on 404. Graceful degradation.</p></div>
     <div class="card"><h3 style="font-size:13px;">Image dedup</h3><p>DALL-E images cached per storyId, never regenerated.</p></div>
     <div class="card"><h3 style="font-size:13px;">Runtime config hot-swap</h3><p>Switch models/modes via admin API without restart.</p></div>
   </div>

@@ -1,10 +1,10 @@
 import { isoNow } from './utils.js';
-import { readOpusRuntimeConfig } from './runtimeConfig.js';
+import { readSonnetRuntimeConfig } from './runtimeConfig.js';
 
-export const DEFAULT_OPUS_SYSTEM_PROMPT =
-  'You are Opus 4.6 acting as a high-quality daily trend curator. Return JSON only. If unsure, pick the most plausible editorial framing.';
+export const DEFAULT_SONNET_SYSTEM_PROMPT =
+  'You are Sonnet 4.6 acting as a high-quality daily trend curator. Return JSON only. If unsure, pick the most plausible editorial framing.';
 export const DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT =
-  'You are Opus 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
+  'You are Sonnet 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
 
 function clampInt(value, fallback, min, max) {
   const n = Number(value);
@@ -18,30 +18,30 @@ function normalizeMode(value) {
     .toLowerCase();
 }
 
-export function getOpusCurationConfigFromEnv() {
-  const stored = readOpusRuntimeConfig() || {};
-  const modeRaw = String(process.env.OPUS_MODE || stored.mode || '').trim();
-  const apiKeyEnv = String(process.env.OPUS_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
+export function getSonnetCurationConfigFromEnv() {
+  const stored = readSonnetRuntimeConfig() || {};
+  const modeRaw = String(process.env.SONNET_MODE || stored.mode || '').trim();
+  const apiKeyEnv = String(process.env.SONNET_API_KEY || process.env.ANTHROPIC_API_KEY || '').trim();
   const apiKeyStored = String(stored.apiKey || '').trim();
   const hasKey = Boolean(apiKeyEnv || apiKeyStored);
   const requestedMode = normalizeMode(modeRaw || 'anthropic');
   const mode = 'anthropic';
-  // Story writing is Opus-only.
-  const model = 'claude-3-7-sonnet-20250219';
+  // Story writing is Sonnet-only.
+  const model = 'claude-sonnet-4-6';
 
-  const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
-  const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
+  const keyStoriesPerEdition = clampInt(process.env.SONNET_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
+  const maxTokens = clampInt(process.env.SONNET_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
   // On Vercel: 250s to fit within 300s limit. Locally: allow more time.
   const isVercel = Boolean(process.env.VERCEL);
   const defaultTimeout = isVercel ? 250000 : 500000;
-  const timeoutMs = clampInt(process.env.OPUS_TIMEOUT_MS || stored.timeoutMs, defaultTimeout, 10000, 600000);
+  const timeoutMs = clampInt(process.env.SONNET_TIMEOUT_MS || stored.timeoutMs, defaultTimeout, 10000, 600000);
   const apiKey = apiKeyEnv || apiKeyStored;
-  const apiUrl = String(process.env.OPUS_API_URL || stored.apiUrl || '').trim();
+  const apiUrl = String(process.env.SONNET_API_URL || stored.apiUrl || '').trim();
   const systemPrompt =
-    String(process.env.OPUS_SYSTEM_PROMPT || stored.systemPrompt || '').trim() || DEFAULT_OPUS_SYSTEM_PROMPT;
+    String(process.env.SONNET_SYSTEM_PROMPT || stored.systemPrompt || '').trim() || DEFAULT_SONNET_SYSTEM_PROMPT;
 
   return {
-    mode, // Opus-only via Anthropic
+    mode, // Sonnet-only via Anthropic
     model,
     keyStoriesPerEdition,
     maxTokens,
@@ -280,21 +280,21 @@ export function buildFutureEditorPrompt({ day, yearsForward, editionDate, storie
 function resolveAnthropicModelAlias(model) {
   const raw = String(model || '').trim();
   const lower = raw.toLowerCase();
-  if (!raw) return 'claude-3-7-sonnet-20250219';
+  if (!raw) return 'claude-sonnet-4-6';
 
   // If the user typed the exact API model name, pass it through unchanged.
-  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-haiku-')) {
+  if (lower.startsWith('claude-sonnet-') || lower.startsWith('claude-haiku-')) {
     return raw;
   }
 
   // User-facing shortcuts → current-gen API model names.
-  if (lower === 'opus-4.6' || lower === 'opus' || lower === 'opus-4' || lower.startsWith('opus-')) {
-    return 'claude-3-7-sonnet-20250219';
+  if (lower === 'sonnet-4.6' || lower === 'sonnet' || lower === 'sonnet-4' || lower.startsWith('sonnet-') || lower === 'sonnet-4.6' || lower.startsWith('sonnet-')) {
+    return 'claude-sonnet-4-6';
   }
   if (lower === 'haiku' || lower.startsWith('haiku')) {
     return 'claude-haiku-4-5-20251001';
   }
-  return 'claude-3-7-sonnet-20250219';
+  return 'claude-sonnet-4-6';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -327,14 +327,14 @@ async function fetchJsonWithTimeout(url, options, timeoutMs) {
 
 async function callAnthropicJson(prompt, config) {
   const url = config.apiUrl || 'https://api.anthropic.com/v1/messages';
-  if (!config.apiKey) throw new Error('OPUS_API_KEY is required for OPUS_MODE=anthropic');
+  if (!config.apiKey) throw new Error('SONNET_API_KEY is required for SONNET_MODE=anthropic');
 
   const requested = String(config.model || '').trim();
   const resolved = resolveAnthropicModelAlias(requested);
-  // Use Opus first, then fall back to Haiku.
+  // Use Sonnet first, then fall back to Haiku.
   const modelsToTry = uniqueStrings([
     resolved,
-    'claude-3-7-sonnet-20250219',
+    'claude-sonnet-4-6',
     'claude-haiku-4-5-20251001'
   ]);
 
@@ -344,7 +344,7 @@ async function callAnthropicJson(prompt, config) {
       model,
       max_tokens: config.maxTokens,
       temperature: 0.4,
-      system: String(config.systemPrompt || DEFAULT_OPUS_SYSTEM_PROMPT),
+      system: String(config.systemPrompt || DEFAULT_SONNET_SYSTEM_PROMPT),
       messages: [{ role: 'user', content: prompt }]
     };
 
@@ -433,7 +433,7 @@ async function callAnthropicJson(prompt, config) {
 
 async function callOpenAiJson(prompt, config) {
   const url = config.apiUrl || 'https://api.openai.com/v1/responses';
-  if (!config.apiKey) throw new Error('OPUS_API_KEY is required for OPUS_MODE=openai');
+  if (!config.apiKey) throw new Error('SONNET_API_KEY is required for SONNET_MODE=openai');
 
   const body = {
     model: config.model,
@@ -445,7 +445,7 @@ async function callOpenAiJson(prompt, config) {
         content: [
           {
             type: 'text',
-            text: String(config.systemPrompt || DEFAULT_OPUS_SYSTEM_PROMPT)
+            text: String(config.systemPrompt || DEFAULT_SONNET_SYSTEM_PROMPT)
           }
         ]
       },
@@ -475,25 +475,25 @@ async function callOpenAiJson(prompt, config) {
 // No mock curation — all curation must go through LLM
 
 export async function generateEditionCurationPlan(input) {
-  const config = input?.config || getOpusCurationConfigFromEnv();
+  const config = input?.config || getSonnetCurationConfigFromEnv();
   const mode = normalizeMode(config.mode);
   if (mode === 'off' || mode === 'disabled') {
-    throw new Error('Curation is Opus-only. OPUS_MODE cannot be off/disabled.');
+    throw new Error('Curation is Sonnet-only. SONNET_MODE cannot be off/disabled.');
   }
 
   const keyCount = clampInt(input?.keyCount ?? config.keyStoriesPerEdition, 1, 0, 7);
   if (mode !== 'anthropic') {
-    throw new Error(`OPUS_MODE="${mode}" is not allowed. Story writing is Opus-only via Anthropic.`);
+    throw new Error(`SONNET_MODE="${mode}" is not allowed. Story writing is Sonnet-only via Anthropic.`);
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
-  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-3-7-sonnet-20250219' });
+  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-sonnet-4-6' });
   if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
   return parsed;
 }
 
 export async function reviewEditionWithFutureEditor(input) {
-  const config = input?.config || getOpusCurationConfigFromEnv();
+  const config = input?.config || getSonnetCurationConfigFromEnv();
   const mode = normalizeMode(config.mode);
   const stories = Array.isArray(input?.stories) ? input.stories : [];
   if (mode !== 'anthropic' || !stories.length) {
@@ -528,7 +528,7 @@ export async function reviewEditionWithFutureEditor(input) {
 
   const reviewConfig = {
     ...config,
-    model: 'claude-3-7-sonnet-20250219',
+    model: 'claude-sonnet-4-6',
     maxTokens: Math.min(Number(config.maxTokens) || 24000, 32000),
     timeoutMs: Math.min(Number(config.timeoutMs) || 180000, 240000),
     systemPrompt: String(config.editorSystemPrompt || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT)
@@ -562,7 +562,7 @@ export async function reviewEditionWithFutureEditor(input) {
     day: String(input?.day || '').trim(),
     yearsForward: Number(input?.yearsForward) || 5,
     editionDate: String(input?.editionDate || '').trim(),
-    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-3-7-sonnet-20250219',
+    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-sonnet-4-6',
     stories: out
   };
 }
@@ -575,7 +575,7 @@ export async function reviewEditionWithFutureEditor(input) {
  */
 export async function generateMissingArticleBodies(stories, configOverride) {
   if (!stories || !stories.length) return new Map();
-  const config = configOverride || getOpusCurationConfigFromEnv();
+  const config = configOverride || getSonnetCurationConfigFromEnv();
   const mode = normalizeMode(config.mode);
   if (mode !== 'anthropic') return new Map();
 
@@ -612,7 +612,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
       ...config,
       maxTokens: Math.min(config.maxTokens, 24000),
       timeoutMs: isVercel ? 120000 : 240000,
-      model: 'claude-3-7-sonnet-20250219'
+      model: 'claude-sonnet-4-6'
     };
 
     try {

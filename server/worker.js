@@ -14,7 +14,7 @@ pipeline.init();
 
 const REFRESH_MS = process.env.PIPELINE_REFRESH_MS ? Number(process.env.PIPELINE_REFRESH_MS) : 0;
 const DAILY_HHMM = String(process.env.PIPELINE_DAILY_HHMM || '05:30').trim();
-const AUTO_CURATE = process.env.OPUS_AUTO_CURATE !== 'false';
+const AUTO_CURATE = process.env.SONNET_AUTO_CURATE !== 'false';
 
 function parseDailyTime(value) {
   const raw = String(value || '').trim();

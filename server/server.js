@@ -9,8 +9,8 @@ import { WebSocket, WebSocketServer } from 'ws';
 
 import { FutureTimesPipeline } from './pipeline/pipeline.js';
 import { SECTION_ORDER, clampYears, formatDay, normalizeDay } from './pipeline/utils.js';
-import { buildEditionCurationPrompt, getOpusCurationConfigFromEnv } from './pipeline/curation.js';
-import { getRuntimeConfigInfo, readRuntimeConfig, readOpusRuntimeConfig, updateOpusRuntimeConfig } from './pipeline/runtimeConfig.js';
+import { buildEditionCurationPrompt, getSonnetCurationConfigFromEnv } from './pipeline/curation.js';
+import { getRuntimeConfigInfo, readRuntimeConfig, readSonnetRuntimeConfig, updateSonnetRuntimeConfig } from './pipeline/runtimeConfig.js';
 import { decorateArticlePayload, decorateEditionPayload } from './future_images/decorators.js';
 import { getFutureImagesFlags, hasBlobConfig, hasPostgresConfig } from './future_images/config.js';
 import { refreshIdeas } from './future_images/ideas.js';
@@ -27,11 +27,11 @@ const PORT_START = Number(process.env.PORT || 57965);
 const PORT_FALLBACK_STEP = Number(process.env.PORT_FALLBACK_STEP || 53);
 const PORT_MAX_TRIES = Number(process.env.PORT_MAX_TRIES || 48);
 
-// Articles are rendered by Anthropic Opus API — no Spark/mock renderers
+// Articles are rendered by Anthropic Sonnet API — no Spark/mock renderers
 const EDITION_YEARS = 5; // Only +5y edition for now
 
 const PIPELINE_REFRESH_MS = Number(process.env.PIPELINE_REFRESH_MS || 1000 * 60 * 60);
-const AUTO_CURATE_DEFAULT = process.env.OPUS_AUTO_CURATE !== 'false';
+const AUTO_CURATE_DEFAULT = process.env.SONNET_AUTO_CURATE !== 'false';
 const MAX_BODY_CHUNK_BYTES = 740;
 const JOB_TTL_MS = 1000 * 60 * 10;
 const MIN_PUBLISHED_BODY_CHARS = Math.max(80, Number(process.env.FT_MIN_PUBLISHED_BODY_CHARS || 120));
@@ -171,7 +171,7 @@ startPipelineScheduler();
 
 function startPipelineScheduler() {
   const autoCurateEnabled = () => {
-    const raw = String(process.env.OPUS_AUTO_CURATE || '').trim().toLowerCase();
+    const raw = String(process.env.SONNET_AUTO_CURATE || '').trim().toLowerCase();
     if (!raw) return AUTO_CURATE_DEFAULT;
     return raw !== 'false' && raw !== '0' && raw !== 'off' && raw !== 'no';
   };
@@ -1266,7 +1266,7 @@ function buildFallbackForecastBody(story, curation) {
 function buildForecastBody(story) {
   const curation = story && story.curation && typeof story.curation === 'object' ? story.curation : null;
 
-  // If Opus curated a full draft article, use it directly
+  // If Sonnet curated a full draft article, use it directly
   const draftBody = curation?.draftArticle?.body || curation?.draftBody || '';
   if (draftBody && draftBody.length > 120) {
     return draftBody;
@@ -1323,18 +1323,18 @@ function buildSeedArticleFromStory(story) {
 
 async function runAnthropicRenderer(job, story, seedArticle) {
   const rendered = { ...seedArticle };
-  const opusCfg = readOpusRuntimeConfig() || {};
-  const apiKey = process.env.ANTHROPIC_API_KEY || opusCfg.apiKey || '';
+  const sonnetCfg = readSonnetRuntimeConfig() || {};
+  const apiKey = process.env.ANTHROPIC_API_KEY || sonnetCfg.apiKey || '';
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY not set — cannot render article');
   }
 
   const userPrompt = buildArticlePrompt(seedArticle, story);
 
-  broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Opus...', percent: 15 });
+  broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
 
-  // Story writing is Opus-only.
-  const model = 'claude-3-7-sonnet-20250219';
+  // Story writing is Sonnet-only.
+  const model = 'claude-sonnet-4-6';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -1533,7 +1533,7 @@ function buildArticlePrompt(seedArticle, story) {
 }
 
 async function renderArticleContent(job, story, seedArticle) {
-  // If there's already a full body (from Opus draftArticle), just finalize
+  // If there's already a full body (from Sonnet draftArticle), just finalize
   if (seedArticle.body && seedArticle.body.trim().length > 200) {
     job.complete = true;
     job.status = 'complete';
@@ -1545,7 +1545,7 @@ async function renderArticleContent(job, story, seedArticle) {
     return;
   }
 
-  // Use Anthropic Opus API to generate the article
+  // Use Anthropic Sonnet API to generate the article
   await runAnthropicRenderer(job, story, seedArticle);
 }
 
@@ -3157,13 +3157,13 @@ async function requestHandler(req, res) {
 
 	    if (pathname === '/api/config') {
 	      if (req.method !== 'GET') return send405(res, 'GET');
-	      const curatorConfig = getOpusCurationConfigFromEnv();
+	      const curatorConfig = getSonnetCurationConfigFromEnv();
 	      const emailConfig = getDailyEmailConfig();
         const imageFlags = getFutureImagesFlags();
 	      sendJson(res, {
 	        provider: {
 	          mode: 'anthropic',
-	          articleModel: 'claude-3-7-sonnet-20250219'
+	          articleModel: 'claude-sonnet-4-6'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),
@@ -3416,7 +3416,7 @@ async function requestHandler(req, res) {
 
     if (pathname === '/api/admin/curator/runtime') {
       if (req.method === 'GET') {
-        const config = getOpusCurationConfigFromEnv();
+        const config = getSonnetCurationConfigFromEnv();
         const persisted = getRuntimeConfigInfo();
         sendJson(res, {
           ok: true,
@@ -3427,8 +3427,8 @@ async function requestHandler(req, res) {
             hasApiKey: Boolean(config.apiKey),
             keyStoriesPerEdition: config.keyStoriesPerEdition,
             systemPrompt: config.systemPrompt,
-            autoCurate: String(process.env.OPUS_AUTO_CURATE || '').trim()
-              ? String(process.env.OPUS_AUTO_CURATE).toLowerCase() !== 'false'
+            autoCurate: String(process.env.SONNET_AUTO_CURATE || '').trim()
+              ? String(process.env.SONNET_AUTO_CURATE).toLowerCase() !== 'false'
               : AUTO_CURATE_DEFAULT
           }
         });
@@ -3443,27 +3443,27 @@ async function requestHandler(req, res) {
         const keyStories = body?.keyStoriesPerEdition != null ? Number(body.keyStoriesPerEdition) : null;
         const autoCurate = body?.autoCurate != null ? Boolean(body.autoCurate) : null;
 
-        if (mode !== null) process.env.OPUS_MODE = mode;
-        if (model !== null) process.env.OPUS_MODEL = model;
+        if (mode !== null) process.env.SONNET_MODE = mode;
+        if (model !== null) process.env.SONNET_MODEL = model;
         if (apiKey !== null) {
           if (!apiKey) {
-            delete process.env.OPUS_API_KEY;
+            delete process.env.SONNET_API_KEY;
           } else {
-            process.env.OPUS_API_KEY = apiKey;
+            process.env.SONNET_API_KEY = apiKey;
           }
         }
         if (systemPrompt !== null) {
           if (!systemPrompt) {
-            delete process.env.OPUS_SYSTEM_PROMPT;
+            delete process.env.SONNET_SYSTEM_PROMPT;
           } else {
-            process.env.OPUS_SYSTEM_PROMPT = systemPrompt;
+            process.env.SONNET_SYSTEM_PROMPT = systemPrompt;
           }
         }
         if (keyStories !== null && Number.isFinite(keyStories)) {
-          process.env.OPUS_KEY_STORIES_PER_EDITION = String(Math.max(0, Math.min(7, Math.round(keyStories))));
+          process.env.SONNET_KEY_STORIES_PER_EDITION = String(Math.max(0, Math.min(7, Math.round(keyStories))));
         }
         if (autoCurate !== null) {
-          process.env.OPUS_AUTO_CURATE = autoCurate ? 'true' : 'false';
+          process.env.SONNET_AUTO_CURATE = autoCurate ? 'true' : 'false';
         }
 
         // Persist to a local runtime config file (outside the web-served project directory).
@@ -3474,13 +3474,13 @@ async function requestHandler(req, res) {
           if (apiKey !== null) patch.apiKey = apiKey || null;
           if (systemPrompt !== null) patch.systemPrompt = systemPrompt || null;
           if (keyStories !== null && Number.isFinite(keyStories)) patch.keyStoriesPerEdition = Math.max(0, Math.min(7, Math.round(keyStories)));
-          updateOpusRuntimeConfig(patch);
+          updateSonnetRuntimeConfig(patch);
         } catch (err) {
           // Persistence is best-effort; still return current runtime state.
           pipeline.traceEvent(formatDay(), 'curator.runtime.persist_error', { error: String(err?.message || err) });
         }
 
-        const config = getOpusCurationConfigFromEnv();
+        const config = getSonnetCurationConfigFromEnv();
         const persisted = getRuntimeConfigInfo();
         sendJson(res, {
           ok: true,
@@ -3491,8 +3491,8 @@ async function requestHandler(req, res) {
             hasApiKey: Boolean(config.apiKey),
             keyStoriesPerEdition: config.keyStoriesPerEdition,
             systemPrompt: config.systemPrompt,
-            autoCurate: String(process.env.OPUS_AUTO_CURATE || '').trim()
-              ? String(process.env.OPUS_AUTO_CURATE).toLowerCase() !== 'false'
+            autoCurate: String(process.env.SONNET_AUTO_CURATE || '').trim()
+              ? String(process.env.SONNET_AUTO_CURATE).toLowerCase() !== 'false'
               : AUTO_CURATE_DEFAULT
           }
         });
@@ -3581,7 +3581,7 @@ async function requestHandler(req, res) {
       const editionDate = String(edition.date || '');
       const candidates = pipeline.listEditionStoryCandidates(builtDay, yearsForward);
       const snapshot = pipeline.buildCurationSnapshot(builtDay);
-      const config = getOpusCurationConfigFromEnv();
+      const config = getSonnetCurationConfigFromEnv();
       const keyCount = Number(url.searchParams.get('keyCount') || config.keyStoriesPerEdition || 1);
       const prompt = buildEditionCurationPrompt({
         day: builtDay,
@@ -3693,12 +3693,12 @@ async function requestHandler(req, res) {
 
   <div class="card">
     <h2>How to run everything from here</h2>
-    <div class="muted">This page is the control center: configure Opus, run the daily job, inspect results, and tweak prompts.</div>
+    <div class="muted">This page is the control center: configure Sonnet, run the daily job, inspect results, and tweak prompts.</div>
     <ol>
-      <li><strong>Set Opus config:</strong> choose model + paste API key, then click <code>Save runtime config</code>. (Key is stored locally; it is never shown in the UI.)</li>
+      <li><strong>Set Sonnet config:</strong> choose model + paste API key, then click <code>Save runtime config</code>. (Key is stored locally; it is never shown in the UI.)</li>
       <li><strong>Run the pipeline:</strong> click <code>Run daily</code> to refresh + curate once/day. Use <code>Force rebuild</code> only when you need to refetch sources + rerun curation.</li>
       <li><strong>Inspect evidence:</strong> open <code>Day signal pack</code> to see what today’s inputs actually were.</li>
-      <li><strong>Inspect extrapolations:</strong> open <code>Extrapolations (HTML)</code> to see Opus’s per-year plans (hero/key stories, directions, traces).</li>
+      <li><strong>Inspect extrapolations:</strong> open <code>Extrapolations (HTML)</code> to see Sonnet’s per-year plans (hero/key stories, directions, traces).</li>
       <li><strong>Tweak a single year:</strong> edit the edition prompt box and click <code>Apply prompt</code> (applies to +${escapeHtml(String(yearsForward))}y for this day).</li>
       <li><strong>Debug:</strong> open <code>Event trace (HTML)</code> to see refresh/curate step timing and errors.</li>
     </ol>
@@ -3713,7 +3713,7 @@ async function requestHandler(req, res) {
     <div class="muted" style="margin-top:8px">System prompt (provider-level):</div>
     <textarea id="systemPromptBox" style="min-height:110px" placeholder="Loading system prompt..."></textarea>
     <div class="muted" style="margin-top:8px">Anthropic model:</div>
-    <input id="modelBox" placeholder="e.g. claude-3-7-sonnet-20250219 (falls back if unavailable)" style="width:100%;padding:8px"/>
+    <input id="modelBox" placeholder="e.g. claude-sonnet-4-6 (falls back if unavailable)" style="width:100%;padding:8px"/>
     <div class="muted" style="margin-top:8px">Anthropic API key (runtime only, not displayed):</div>
     <input id="apiKeyBox" type="password" placeholder="Paste key to activate Anthropic (stored only in this running process)" style="width:100%;padding:8px"/>
     <div class="row" style="margin-top:8px">

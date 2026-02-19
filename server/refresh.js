@@ -13,7 +13,7 @@ const pipeline = new FutureTimesPipeline({
 pipeline.init();
 const day = formatDay();
 await pipeline.refresh({ day, force: true });
-if (process.env.OPUS_AUTO_CURATE !== 'false') {
+if (process.env.SONNET_AUTO_CURATE !== 'false') {
   await pipeline.curateDay(day, { force: true });
 }
 console.log(JSON.stringify(pipeline.getStatus(), null, 2));

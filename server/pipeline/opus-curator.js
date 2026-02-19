@@ -213,7 +213,7 @@ export function buildMockCuration({ day, sectionOrder, topicsBySection, econSign
   };
 }
 
-function opusEnabled(mode) {
+function sonnetEnabled(mode) {
   const m = String(mode || '').trim().toLowerCase();
   return m && m !== 'off' && m !== 'disabled' && m !== '0' && m !== 'false';
 }
@@ -242,7 +242,7 @@ async function fetchWithTimeout(url, options = {}) {
 }
 
 async function callOpenAIJson({ model, system, user, timeoutMs }) {
-  const apiKey = envKey('OPENAI_API_KEY') || envKey('OPUS_API_KEY');
+  const apiKey = envKey('OPENAI_API_KEY') || envKey('SONNET_API_KEY');
   if (!apiKey) throw new Error('Missing OPENAI_API_KEY');
   const baseUrl = envKey('OPENAI_BASE_URL') || 'https://api.openai.com/v1';
   const url = `${baseUrl.replace(/\/+$/g, '')}/chat/completions`;
@@ -275,7 +275,7 @@ async function callOpenAIJson({ model, system, user, timeoutMs }) {
 }
 
 async function callAnthropicJson({ model, system, user, timeoutMs }) {
-  const apiKey = envKey('ANTHROPIC_API_KEY') || envKey('OPUS_API_KEY');
+  const apiKey = envKey('ANTHROPIC_API_KEY') || envKey('SONNET_API_KEY');
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
   const url = envKey('ANTHROPIC_BASE_URL') || 'https://api.anthropic.com/v1/messages';
   const resp = await fetchWithTimeout(url, {
@@ -305,8 +305,8 @@ async function callAnthropicJson({ model, system, user, timeoutMs }) {
 }
 
 async function callHttpJson({ user, timeoutMs }) {
-  const url = envKey('OPUS_HTTP_URL');
-  if (!url) throw new Error('Missing OPUS_HTTP_URL');
+  const url = envKey('SONNET_HTTP_URL');
+  if (!url) throw new Error('Missing SONNET_HTTP_URL');
   const resp = await fetchWithTimeout(url, {
     timeoutMs,
     method: 'POST',
@@ -484,14 +484,14 @@ function normalizeEditionPlan(raw, { yearsForward, editionDate, sectionOrder }) 
 }
 
 export async function generateDailyCuration({ day, sectionOrder, topicsBySection, econSignals, marketSignals }) {
-  const mode = String(process.env.OPUS_MODE || 'auto').trim().toLowerCase();
-  if (!opusEnabled(mode)) {
+  const mode = String(process.env.SONNET_MODE || 'auto').trim().toLowerCase();
+  if (!sonnetEnabled(mode)) {
     return { payload: null, provider: 'disabled', model: 'disabled', promptJson: null, error: null };
   }
 
   const providerMode = resolveProvider(mode);
-  const timeoutMs = Math.max(20000, Math.min(180000, Number(process.env.OPUS_TIMEOUT_MS || 90000)));
-  const model = envKey('OPUS_MODEL') || envKey('OPUS_MODEL_NAME') || 'opus-4.6';
+  const timeoutMs = Math.max(20000, Math.min(180000, Number(process.env.SONNET_TIMEOUT_MS || 90000)));
+  const model = envKey('SONNET_MODEL') || envKey('SONNET_MODEL_NAME') || 'sonnet-4.6';
 
   const callJson = async ({ system, user }) => {
     if (providerMode === 'openai') return callOpenAIJson({ model, system, user, timeoutMs });
@@ -508,7 +508,7 @@ export async function generateDailyCuration({ day, sectionOrder, topicsBySection
   const dayBriefResp = await callJson({ system: promptDayBrief.system, user: promptDayBrief.user });
   const dayBrief = dayBriefResp && dayBriefResp.dayBrief ? dayBriefResp.dayBrief : null;
   if (!dayBrief || typeof dayBrief !== 'object') {
-    throw new Error('Opus did not return dayBrief');
+    throw new Error('Sonnet did not return dayBrief');
   }
 
   const editions = [];

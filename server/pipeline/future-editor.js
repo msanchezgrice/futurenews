@@ -1,7 +1,7 @@
-import { getOpusCurationConfigFromEnv } from './curation.js';
+import { getSonnetCurationConfigFromEnv } from './curation.js';
 
 const DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT =
-  'You are Opus 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
+  'You are Sonnet 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
 
 function trimText(value, maxLen = 1200) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
@@ -38,13 +38,13 @@ function normalizeEditorDecision(value) {
 function resolveAnthropicModelAlias(model) {
   const raw = String(model || '').trim();
   const lower = raw.toLowerCase();
-  if (!raw) return 'claude-3-7-sonnet-20250219';
-  if (lower.startsWith('claude-opus-') || lower.startsWith('claude-haiku-')) {
+  if (!raw) return 'claude-sonnet-4-6';
+  if (lower.startsWith('claude-sonnet-') || lower.startsWith('claude-haiku-')) {
     return raw;
   }
-  if (lower === 'opus-4.6' || lower === 'opus' || lower.startsWith('opus-')) return 'claude-3-7-sonnet-20250219';
+  if (lower === 'sonnet-4.6' || lower === 'sonnet' || lower.startsWith('sonnet-')) return 'claude-sonnet-4-6';
   if (lower === 'haiku' || lower.startsWith('haiku')) return 'claude-haiku-4-5-20251001';
-  return 'claude-3-7-sonnet-20250219';
+  return 'claude-sonnet-4-6';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -78,11 +78,11 @@ async function fetchJsonWithTimeout(url, options, timeoutMs) {
 async function callAnthropicJson(prompt, config) {
   const url = String(config?.apiUrl || '').trim() || 'https://api.anthropic.com/v1/messages';
   const apiKey = String(config?.apiKey || '').trim();
-  if (!apiKey) throw new Error('OPUS_API_KEY is required for future editor review');
+  if (!apiKey) throw new Error('SONNET_API_KEY is required for future editor review');
 
   const requested = String(config?.model || '').trim();
-  const resolved = resolveAnthropicModelAlias(requested || 'claude-3-7-sonnet-20250219');
-  const modelsToTry = [resolved, 'claude-3-7-sonnet-20250219', 'claude-haiku-4-5-20251001'].filter(Boolean);
+  const resolved = resolveAnthropicModelAlias(requested || 'claude-sonnet-4-6');
+  const modelsToTry = [resolved, 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'].filter(Boolean);
   const maxTokens = Math.max(2000, Math.min(32000, Number(config?.maxTokens) || 18000));
   const timeoutMs = Math.max(20000, Math.min(300000, Number(config?.timeoutMs) || 180000));
   const systemPrompt = String(config?.systemPrompt || '').trim() || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT;
@@ -189,7 +189,7 @@ export function buildFutureEditorPrompt({ day, yearsForward, editionDate, storie
 }
 
 export async function reviewEditionWithFutureEditor(input) {
-  const config = input?.config || getOpusCurationConfigFromEnv();
+  const config = input?.config || getSonnetCurationConfigFromEnv();
   const mode = String(config?.mode || '').trim().toLowerCase();
   const stories = Array.isArray(input?.stories) ? input.stories : [];
   const base = {
@@ -213,7 +213,7 @@ export async function reviewEditionWithFutureEditor(input) {
   const parsed = await callAnthropicJson(prompt, {
     apiKey: config.apiKey,
     apiUrl: config.apiUrl,
-    model: 'claude-3-7-sonnet-20250219',
+    model: 'claude-sonnet-4-6',
     maxTokens: Math.min(Number(config.maxTokens) || 20000, 32000),
     timeoutMs: Math.min(Number(config.timeoutMs) || 180000, 240000),
     systemPrompt: DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT
@@ -243,7 +243,7 @@ export async function reviewEditionWithFutureEditor(input) {
 
   return {
     ...base,
-    model: String(parsed?.model || 'claude-3-7-sonnet-20250219'),
+    model: String(parsed?.model || 'claude-sonnet-4-6'),
     stories: out
   };
 }

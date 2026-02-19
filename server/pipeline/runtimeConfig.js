@@ -80,10 +80,10 @@ export function writeRuntimeConfig(payload) {
   return { file };
 }
 
-export function readOpusRuntimeConfig() {
+export function readSonnetRuntimeConfig() {
   const cfg = readRuntimeConfig();
-  const opus = cfg && typeof cfg === 'object' ? cfg.opus : null;
-  return opus && typeof opus === 'object' ? opus : null;
+  const sonnet = cfg && typeof cfg === 'object' ? cfg.sonnet : null;
+  return sonnet && typeof sonnet === 'object' ? sonnet : null;
 }
 
 function applyPatch(target, patch) {
@@ -103,13 +103,13 @@ function applyPatch(target, patch) {
   return next;
 }
 
-export function updateOpusRuntimeConfig(patch) {
+export function updateSonnetRuntimeConfig(patch) {
   const existing = readRuntimeConfig() || { schema: 1 };
   const next = {
     ...existing,
     schema: 1,
     updatedAt: isoNow(),
-    opus: applyPatch(existing.opus, patch)
+    sonnet: applyPatch(existing.sonnet, patch)
   };
   return { ...getRuntimeConfigInfo(), ...writeRuntimeConfig(next), config: next };
 }

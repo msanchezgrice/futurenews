@@ -76,7 +76,7 @@ import {
 import {
   buildEditionCurationPrompt,
   generateEditionCurationPlan,
-  getOpusCurationConfigFromEnv,
+  getSonnetCurationConfigFromEnv,
   generateMissingArticleBodies
 } from './curation.js';
 import { reviewEditionWithFutureEditor } from './future-editor.js';
@@ -413,7 +413,7 @@ function buildHeadlineSeed(topicLabel, topicBrief, yearsForward, seed) {
   }
   if (subject.length < 4) subject = 'Signal shift';
 
-  // Minimal fallback headline — Opus should override this with a real extrapolation
+  // Minimal fallback headline — Sonnet should override this with a real extrapolation
   return `${subject} in ${targetYear}`;
 }
 
@@ -437,7 +437,7 @@ function buildDekSeed(topicLabel, topicBrief, yearsForward, editionDate, baselin
   const targetYear = Number(baselineYear) + (Number(yearsForward) || 0);
   const dateLabel = String(editionDate || '').trim() || String(targetYear);
 
-  // Minimal fallback dek — Opus should override this with a real extrapolation
+  // Minimal fallback dek — Sonnet should override this with a real extrapolation
   const shortLabel = label.length > 80 ? label.slice(0, 80).replace(/\s+\S*$/, '').trim() : label;
   return `A ${targetYear} report on ${shortLabel.toLowerCase()}.`;
 }
@@ -2051,7 +2051,7 @@ export class FutureTimesPipeline {
         return { ok: true, day: normalized, skipped: true, reason: 'story_curations_present', existing };
       }
 
-      const config = getOpusCurationConfigFromEnv();
+      const config = getSonnetCurationConfigFromEnv();
       const snapshot = this.buildCurationSnapshot(normalized);
 
       const upsert = this.db.prepare(`
@@ -2194,7 +2194,7 @@ export class FutureTimesPipeline {
               citations,
               stats: { econ: pack.econ || {}, markets: pack.markets || [] },
               editionDate,
-              generatedFrom: `opus-curator / ${normalized}`,
+              generatedFrom: `sonnet-curator / ${normalized}`,
               generatedAt,
               curationGeneratedAt: generatedAt,
               yearsForward
@@ -2280,7 +2280,7 @@ export class FutureTimesPipeline {
               citations: Array.isArray(pack.citations) ? pack.citations : [],
               stats: { econ: pack.econ || {}, markets: pack.markets || [] },
               editionDate,
-              generatedFrom: `opus-backfill / ${normalized}`,
+              generatedFrom: `sonnet-backfill / ${normalized}`,
               generatedAt: isoNow(),
               curationGeneratedAt: generatedAt,
               yearsForward
@@ -2299,7 +2299,7 @@ export class FutureTimesPipeline {
           }
         }
 
-        // ── Future-lens editorial gate (Opus 4.6): approve/revise/reject story plausibility ──
+        // ── Future-lens editorial gate (Sonnet 4.6): approve/revise/reject story plausibility ──
         try {
           const editorStories = candidates.map((candidate) => {
             const storyId = String(candidate.storyId || '').trim();
@@ -2375,7 +2375,7 @@ export class FutureTimesPipeline {
             existingPlan.editorDecision = nextDecision;
             existingPlan.editorReason = reason;
             existingPlan.editorReviewedAt = reviewedAt;
-            existingPlan.editorModel = String(editorReview?.model || 'claude-3-7-sonnet-20250219');
+            existingPlan.editorModel = String(editorReview?.model || 'claude-sonnet-4-6');
 
             if (nextDecision === 'reject') {
               existingPlan.key = false;
@@ -2609,7 +2609,7 @@ export class FutureTimesPipeline {
     const candidates = this.listEditionStoryCandidates(normalized, y);
     if (!candidates.length) throw new Error('no_candidates');
 
-    const config = getOpusCurationConfigFromEnv();
+    const config = getSonnetCurationConfigFromEnv();
     if (options.systemPrompt != null) {
       config.systemPrompt = String(options.systemPrompt || '').trim() || config.systemPrompt;
     }
@@ -2710,7 +2710,7 @@ export class FutureTimesPipeline {
           citations: Array.isArray(pack.citations) ? pack.citations : [],
           stats: { econ: pack.econ || {}, markets: pack.markets || [] },
           editionDate,
-          generatedFrom: `opus-curator / ${normalized}`,
+          generatedFrom: `sonnet-curator / ${normalized}`,
           generatedAt,
           curationGeneratedAt: generatedAt,
           yearsForward: y

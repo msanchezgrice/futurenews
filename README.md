@@ -43,21 +43,21 @@ If 45678 is occupied, the server automatically increments by 17 and tries the ne
   - optional: `SPARK_AUTH_PREFIX=Bearer`
   - optional: `SPARK_FALLBACK_TO_MOCK=false` (to fail fast if Spark is unavailable)
 
-## Daily curation (Opus → Spark guidance)
+## Daily curation (Sonnet → Spark guidance)
 The pipeline can run a daily "curation" step that:
-- Uses a higher-quality model (configured as "Opus 4.6") to rewrite headlines/deks and produce short per-story directions.
+- Uses a higher-quality model (configured as "Sonnet 4.6") to rewrite headlines/deks and produce short per-story directions.
 - Prewrites only a small number of key stories per edition (stored in the normal render cache so they load instantly).
 - Leaves secondary stories as lightweight directives so the fast model (Codex Spark) writes them on click.
 
 Configure via environment variables:
-- `OPUS_MODE=mock` (default) or `OPUS_MODE=anthropic` or `OPUS_MODE=openai`
-- `OPUS_MODEL=opus-4.6`
-- `OPUS_API_KEY=...` (required for `anthropic` / `openai`)
-- `OPUS_API_URL=...` (optional override; defaults to the provider's standard endpoint)
-- `OPUS_SYSTEM_PROMPT=...` (optional; overrides the provider system prompt)
-- `OPUS_KEY_STORIES_PER_EDITION=1` (how many stories per +year edition to prewrite)
-- `OPUS_MAX_TOKENS=4500`
-- `OPUS_TIMEOUT_MS=60000`
+- `SONNET_MODE=mock` (default) or `SONNET_MODE=anthropic` or `SONNET_MODE=openai`
+- `SONNET_MODEL=sonnet-4.6`
+- `SONNET_API_KEY=...` (required for `anthropic` / `openai`)
+- `SONNET_API_URL=...` (optional override; defaults to the provider's standard endpoint)
+- `SONNET_SYSTEM_PROMPT=...` (optional; overrides the provider system prompt)
+- `SONNET_KEY_STORIES_PER_EDITION=1` (how many stories per +year edition to prewrite)
+- `SONNET_MAX_TOKENS=4500`
+- `SONNET_TIMEOUT_MS=60000`
 
 Run the daily worker (schedules by `PIPELINE_DAILY_HHMM`, default `05:30` local):
 ```bash
@@ -80,12 +80,12 @@ curl -X POST "http://localhost:57965/api/admin/daily"
 ### Vercel env via CLI
 If deploying to Vercel, you can set env vars via the CLI:
 ```bash
-vercel env add OPUS_MODE production
-vercel env add OPUS_MODEL production
-vercel env add OPUS_API_KEY production
-vercel env add OPUS_KEY_STORIES_PER_EDITION production
-vercel env add OPUS_MAX_TOKENS production
-vercel env add OPUS_TIMEOUT_MS production
+vercel env add SONNET_MODE production
+vercel env add SONNET_MODEL production
+vercel env add SONNET_API_KEY production
+vercel env add SONNET_KEY_STORIES_PER_EDITION production
+vercel env add SONNET_MAX_TOKENS production
+vercel env add SONNET_TIMEOUT_MS production
 ```
 Then redeploy (or trigger a new deployment) so the env vars apply.
 
