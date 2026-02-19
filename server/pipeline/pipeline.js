@@ -2375,7 +2375,7 @@ export class FutureTimesPipeline {
             existingPlan.editorDecision = nextDecision;
             existingPlan.editorReason = reason;
             existingPlan.editorReviewedAt = reviewedAt;
-            existingPlan.editorModel = String(editorReview?.model || 'claude-opus-4-6');
+            existingPlan.editorModel = String(editorReview?.model || 'claude-3-7-sonnet-20250219');
 
             if (nextDecision === 'reject') {
               existingPlan.key = false;

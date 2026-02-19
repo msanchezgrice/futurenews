@@ -27,7 +27,7 @@ export function getOpusCurationConfigFromEnv() {
   const requestedMode = normalizeMode(modeRaw || 'anthropic');
   const mode = 'anthropic';
   // Story writing is Opus-only.
-  const model = 'claude-opus-4-6';
+  const model = 'claude-3-7-sonnet-20250219';
 
   const keyStoriesPerEdition = clampInt(process.env.OPUS_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
   const maxTokens = clampInt(process.env.OPUS_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
@@ -280,7 +280,7 @@ export function buildFutureEditorPrompt({ day, yearsForward, editionDate, storie
 function resolveAnthropicModelAlias(model) {
   const raw = String(model || '').trim();
   const lower = raw.toLowerCase();
-  if (!raw) return 'claude-opus-4-6';
+  if (!raw) return 'claude-3-7-sonnet-20250219';
 
   // If the user typed the exact API model name, pass it through unchanged.
   if (lower.startsWith('claude-opus-') || lower.startsWith('claude-haiku-')) {
@@ -289,12 +289,12 @@ function resolveAnthropicModelAlias(model) {
 
   // User-facing shortcuts → current-gen API model names.
   if (lower === 'opus-4.6' || lower === 'opus' || lower === 'opus-4' || lower.startsWith('opus-')) {
-    return 'claude-opus-4-6';
+    return 'claude-3-7-sonnet-20250219';
   }
   if (lower === 'haiku' || lower.startsWith('haiku')) {
     return 'claude-haiku-4-5-20251001';
   }
-  return 'claude-opus-4-6';
+  return 'claude-3-7-sonnet-20250219';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -334,7 +334,7 @@ async function callAnthropicJson(prompt, config) {
   // Use Opus first, then fall back to Haiku.
   const modelsToTry = uniqueStrings([
     resolved,
-    'claude-opus-4-6',
+    'claude-3-7-sonnet-20250219',
     'claude-haiku-4-5-20251001'
   ]);
 
@@ -487,7 +487,7 @@ export async function generateEditionCurationPlan(input) {
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
-  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-opus-4-6' });
+  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-3-7-sonnet-20250219' });
   if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
   return parsed;
 }
@@ -528,7 +528,7 @@ export async function reviewEditionWithFutureEditor(input) {
 
   const reviewConfig = {
     ...config,
-    model: 'claude-opus-4-6',
+    model: 'claude-3-7-sonnet-20250219',
     maxTokens: Math.min(Number(config.maxTokens) || 24000, 32000),
     timeoutMs: Math.min(Number(config.timeoutMs) || 180000, 240000),
     systemPrompt: String(config.editorSystemPrompt || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT)
@@ -562,7 +562,7 @@ export async function reviewEditionWithFutureEditor(input) {
     day: String(input?.day || '').trim(),
     yearsForward: Number(input?.yearsForward) || 5,
     editionDate: String(input?.editionDate || '').trim(),
-    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-opus-4-6',
+    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-3-7-sonnet-20250219',
     stories: out
   };
 }
@@ -612,7 +612,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
       ...config,
       maxTokens: Math.min(config.maxTokens, 24000),
       timeoutMs: isVercel ? 120000 : 240000,
-      model: 'claude-opus-4-6'
+      model: 'claude-3-7-sonnet-20250219'
     };
 
     try {

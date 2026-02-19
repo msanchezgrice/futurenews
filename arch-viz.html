@@ -689,7 +689,7 @@
     <div class="env-card">
       <h4>Opus Curation</h4>
       <div class="env-row"><span class="env-key">OPUS_MODE</span><span class="env-val">anthropic | openai (no mock fallback)</span></div>
-      <div class="env-row"><span class="env-key">OPUS_MODEL</span><span class="env-val">claude-opus-4-6</span></div>
+      <div class="env-row"><span class="env-key">OPUS_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
       <div class="env-row"><span class="env-key">OPUS_API_KEY</span><span class="env-val">(Anthropic/OpenAI key)</span></div>
       <div class="env-row"><span class="env-key">OPUS_API_URL</span><span class="env-val">(custom endpoint)</span></div>
       <div class="env-row"><span class="env-key">OPUS_SYSTEM_PROMPT</span><span class="env-val">(override system prompt)</span></div>
@@ -701,7 +701,7 @@
     <div class="env-card">
       <h4>Article Rendering</h4>
       <div class="env-row"><span class="env-key">ANTHROPIC_API_KEY</span><span class="env-val">(required for article rendering)</span></div>
-      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-opus-4-6</span></div>
+      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
     </div>
     <div class="env-card">
       <h4>Image Generation + Worker</h4>
@@ -724,7 +724,7 @@
       <p style="margin-bottom:12px">1 batch call per edition. ALL ~20 stories curated with full draftArticle + confidence.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code></td></tr>
-        <tr><td>Model</td><td>claude-opus-4-6 (configurable)</td></tr>
+        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (configurable)</td></tr>
         <tr><td>Thinking</td><td>Enabled, 10K budget (Opus)</td></tr>
         <tr><td>Temperature</td><td>N/A (thinking) or 0.4 (Haiku)</td></tr>
         <tr><td>Max tokens</td><td>32,000 (4K-64K)</td></tr>
@@ -743,7 +743,7 @@
       <p style="margin-bottom:12px">On-click via HTTP API. Skipped if draftArticle body already >200 chars.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code> (streaming)</td></tr>
-        <tr><td>Model</td><td>claude-opus-4-6 (<code>ARTICLE_MODEL</code>)</td></tr>
+        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (<code>ARTICLE_MODEL</code>)</td></tr>
         <tr><td>Timeout</td><td>120s</td></tr>
         <tr><td>Auth</td><td><code>ANTHROPIC_API_KEY</code></td></tr>
         <tr><td>Fallback</td><td>None (errors propagated)</td></tr>
