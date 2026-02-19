@@ -157,7 +157,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `Task: produce a curation plan for the *existing* story candidates list below (do not invent new storyIds).`,
     `- Pick exactly ${keyCount} key stories (the most click-worthy). At least one key story should be from the AI section if AI candidates are present.`,
     `- For EVERY story: propose a sharper headline + dek that describes an ORIGINAL future event, plus concise "sparkDirections" (writing directions for the article).`,
-    `- For EVERY story: write a full draftArticle with title, dek, body (3-4 paragraphs, NYT-style). KEY stories get 4 paragraphs, others get 3 paragraphs minimum.`,
+    `- For KEY stories (max ${keyCount}): write a full draftArticle with title, dek, body (3-4 paragraphs, NYT-style).`,
+    `- For NON-KEY stories: set draftArticle to null. Keep sparkDirections detailed. A second pass generates bodies.`,
     `- For EVERY story: assign a "confidence" score (0-100) rating how plausible/likely this prediction is. 90+ = near-certain extrapolation, 70-89 = highly likely, 50-69 = plausible, below 50 = speculative.`,
     ``,
     `CRITICAL — ANALYZE EACH STORY AND EXTRAPOLATE:`,
@@ -196,8 +197,8 @@ export function buildEditionCurationPrompt({ day, yearsForward, editionDate, can
     `- confidence: integer 0-100 rating the plausibility of this prediction.`,
     aiExtrapolationBlock,
     `JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":{"title":"string","dek":"string","body":"string"}}]}`,
-    `ALL stories MUST have a draftArticle with title, dek, and body (3-4 paragraphs). No exceptions — every story needs a full article.`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"editionDate":"${editionDate}","keyStoryIds":["id"],"stories":[{"storyId":"id","curatedTitle":"string","curatedDek":"string","sparkDirections":"string","key":true,"hero":false,"futureEventSeed":"string","confidence":75,"draftArticle":null}]}`,
+    `Non-key stories MUST have draftArticle: null. Only key stories get full articles in this pass.`,
     ``,
     ``,
     `Story candidates (must use these storyIds exactly):`,
@@ -587,7 +588,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
     batches.push(stories.slice(i, i + BATCH_SIZE));
   }
 
-  for (const batch of batches) {
+  const promises = batches.map(async (batch) => {
     const editionDate = batch[0]?.editionDate || '';
     const storyLines = batch.map((s, i) =>
       `${i + 1}. storyId: ${s.storyId}\n   title: ${s.title}\n   dek: ${s.dek}\n   directions: ${s.sparkDirections || s.dek}`
@@ -631,7 +632,9 @@ export async function generateMissingArticleBodies(stories, configOverride) {
     } catch (err) {
       console.error(`[backfill] Batch failed (${batch.length} stories):`, err?.message || err);
     }
-  }
+  });
+
+  await Promise.all(promises);
 
   return result;
 }
