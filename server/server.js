@@ -562,6 +562,8 @@ function filterEditionToPublishedArticles(payload, options = {}) {
     const articleImage = sanitizeFinalImage(articleInput?.image || '');
     const mergedImage = renderedImage || articleImage || '';
 
+    const body = String(rendered?.body || articleInput?.body || story?.body || '').trim();
+
     return {
       ...articleInput,
       id,
@@ -570,6 +572,7 @@ function filterEditionToPublishedArticles(payload, options = {}) {
       dek,
       meta,
       image: mergedImage,
+      body,
       confidence,
       _strict: strict,
       _rank: rank
