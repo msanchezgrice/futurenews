@@ -1334,7 +1334,7 @@ async function runAnthropicRenderer(job, story, seedArticle) {
   broadcastToJobSubscribers(job, { type: 'render.progress', phase: 'Generating article with Sonnet...', percent: 15 });
 
   // Story writing is Sonnet-only.
-  const model = 'claude-sonnet-4-6';
+  const model = 'claude-3-7-sonnet-20250219';
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120000);
 
@@ -3163,7 +3163,7 @@ async function requestHandler(req, res) {
 	      sendJson(res, {
 	        provider: {
 	          mode: 'anthropic',
-	          articleModel: 'claude-sonnet-4-6'
+	          articleModel: 'claude-3-7-sonnet-20250219'
         },
         curator: {
           mode: String(curatorConfig.mode || 'mock').toLowerCase(),
@@ -3713,7 +3713,7 @@ async function requestHandler(req, res) {
     <div class="muted" style="margin-top:8px">System prompt (provider-level):</div>
     <textarea id="systemPromptBox" style="min-height:110px" placeholder="Loading system prompt..."></textarea>
     <div class="muted" style="margin-top:8px">Anthropic model:</div>
-    <input id="modelBox" placeholder="e.g. claude-sonnet-4-6 (falls back if unavailable)" style="width:100%;padding:8px"/>
+    <input id="modelBox" placeholder="e.g. claude-3-7-sonnet-20250219 (falls back if unavailable)" style="width:100%;padding:8px"/>
     <div class="muted" style="margin-top:8px">Anthropic API key (runtime only, not displayed):</div>
     <input id="apiKeyBox" type="password" placeholder="Paste key to activate Anthropic (stored only in this running process)" style="width:100%;padding:8px"/>
     <div class="row" style="margin-top:8px">

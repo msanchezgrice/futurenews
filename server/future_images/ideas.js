@@ -175,7 +175,7 @@ function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations
       .join('\n');
 
   return [
-    `You are Sonnet 4.6 acting as a high-quality daily "future objects" editor for The Future Times.`,
+    `You are Sonnet 3.7 acting as a high-quality daily "future objects" editor for The Future Times.`,
     `Return JSON only. No markdown fences. No extra text.`,
     ``,
     `Goal: produce a stack-ranked list of ${rangeCount} HIGH-CONFIDENCE physical/digital objects that plausibly exist by the edition date.`,
@@ -204,7 +204,7 @@ function buildIdeasPrompt({ day, yearsForward, edition, snapshot, storyCurations
     `- sources.signals: max 6 strings`,
     ``,
     `Output JSON schema:`,
-    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"targetYear":${targetYear},"generatedAt":"ISO","model":"claude-sonnet-4-6","ideas":[{"rank":1,"score":92.3,"confidence":85,"title":"...","objectType":"device|building|vehicle|ui|infrastructure|consumer_product|...","description":"...","scene":"...","sources":{"storyIds":["..."],"signals":["..."]}}]}`,
+    `{"schema":1,"day":"${day}","yearsForward":${yearsForward},"targetYear":${targetYear},"generatedAt":"ISO","model":"claude-3-7-sonnet-20250219","ideas":[{"rank":1,"score":92.3,"confidence":85,"title":"...","objectType":"device|building|vehicle|ui|infrastructure|consumer_product|...","description":"...","scene":"...","sources":{"storyIds":["..."],"signals":["..."]}}]}`,
     ``,
     `Baseline topic clusters (today):`,
     topicLines || '(none)',
@@ -359,7 +359,7 @@ export async function refreshIdeas({ day, pipeline, yearsForward = 5, count = 50
 
   // Persist ideas (stable IDs per day+rank so on-demand images stay attached across refreshes).
   const generatedAt = new Date().toISOString();
-  const providerModel = String(model || '').trim() || 'claude-sonnet-4-6';
+  const providerModel = String(model || '').trim() || 'claude-3-7-sonnet-20250219';
 
   // Best-effort: clear out existing ranks for this day.
   await pgQuery(`DELETE FROM ft_future_ideas WHERE day=$1 AND years_forward=$2;`, [builtDay, yearsForward]);

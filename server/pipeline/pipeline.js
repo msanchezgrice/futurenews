@@ -2299,7 +2299,7 @@ export class FutureTimesPipeline {
           }
         }
 
-        // ── Future-lens editorial gate (Sonnet 4.6): approve/revise/reject story plausibility ──
+        // ── Future-lens editorial gate (Sonnet 3.7): approve/revise/reject story plausibility ──
         try {
           const editorStories = candidates.map((candidate) => {
             const storyId = String(candidate.storyId || '').trim();
@@ -2375,7 +2375,7 @@ export class FutureTimesPipeline {
             existingPlan.editorDecision = nextDecision;
             existingPlan.editorReason = reason;
             existingPlan.editorReviewedAt = reviewedAt;
-            existingPlan.editorModel = String(editorReview?.model || 'claude-sonnet-4-6');
+            existingPlan.editorModel = String(editorReview?.model || 'claude-3-7-sonnet-20250219');
 
             if (nextDecision === 'reject') {
               existingPlan.key = false;

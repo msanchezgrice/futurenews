@@ -2,9 +2,9 @@ import { isoNow } from './utils.js';
 import { readSonnetRuntimeConfig } from './runtimeConfig.js';
 
 export const DEFAULT_SONNET_SYSTEM_PROMPT =
-  'You are Sonnet 4.6 acting as a high-quality daily trend curator. Return JSON only. If unsure, pick the most plausible editorial framing.';
+  'You are Sonnet 3.7 acting as a high-quality daily trend curator. Return JSON only. If unsure, pick the most plausible editorial framing.';
 export const DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT =
-  'You are Sonnet 4.6 acting as the final standards editor for The Future Times. Return strict JSON only.';
+  'You are Sonnet 3.7 acting as the final standards editor for The Future Times. Return strict JSON only.';
 
 function clampInt(value, fallback, min, max) {
   const n = Number(value);
@@ -27,7 +27,7 @@ export function getSonnetCurationConfigFromEnv() {
   const requestedMode = normalizeMode(modeRaw || 'anthropic');
   const mode = 'anthropic';
   // Story writing is Sonnet-only.
-  const model = 'claude-sonnet-4-6';
+  const model = 'claude-3-7-sonnet-20250219';
 
   const keyStoriesPerEdition = clampInt(process.env.SONNET_KEY_STORIES_PER_EDITION || stored.keyStoriesPerEdition, 3, 0, 7);
   const maxTokens = clampInt(process.env.SONNET_MAX_TOKENS || stored.maxTokens, 55000, 4000, 64000);
@@ -280,7 +280,7 @@ export function buildFutureEditorPrompt({ day, yearsForward, editionDate, storie
 function resolveAnthropicModelAlias(model) {
   const raw = String(model || '').trim();
   const lower = raw.toLowerCase();
-  if (!raw) return 'claude-sonnet-4-6';
+  if (!raw) return 'claude-3-7-sonnet-20250219';
 
   // If the user typed the exact API model name, pass it through unchanged.
   if (lower.startsWith('claude-sonnet-') || lower.startsWith('claude-haiku-')) {
@@ -288,13 +288,13 @@ function resolveAnthropicModelAlias(model) {
   }
 
   // User-facing shortcuts → current-gen API model names.
-  if (lower === 'sonnet-4.6' || lower === 'sonnet' || lower === 'sonnet-4' || lower.startsWith('sonnet-') || lower === 'sonnet-4.6' || lower.startsWith('sonnet-')) {
-    return 'claude-sonnet-4-6';
+  if (lower === 'sonnet-3.7' || lower === 'sonnet' || lower === 'sonnet-4' || lower.startsWith('sonnet-') || lower === 'sonnet-3.7' || lower.startsWith('sonnet-')) {
+    return 'claude-3-7-sonnet-20250219';
   }
   if (lower === 'haiku' || lower.startsWith('haiku')) {
     return 'claude-haiku-4-5-20251001';
   }
-  return 'claude-sonnet-4-6';
+  return 'claude-3-7-sonnet-20250219';
 }
 
 async function fetchJsonWithTimeout(url, options, timeoutMs) {
@@ -334,7 +334,7 @@ async function callAnthropicJson(prompt, config) {
   // Use Sonnet first, then fall back to Haiku.
   const modelsToTry = uniqueStrings([
     resolved,
-    'claude-sonnet-4-6',
+    'claude-3-7-sonnet-20250219',
     'claude-haiku-4-5-20251001'
   ]);
 
@@ -487,7 +487,7 @@ export async function generateEditionCurationPlan(input) {
   }
 
   const prompt = String(input?.prompt || '').trim() || buildEditionCurationPrompt({ ...input, keyCount });
-  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-sonnet-4-6' });
+  const parsed = await callAnthropicJson(prompt, { ...config, model: 'claude-3-7-sonnet-20250219' });
   if (!parsed) throw new Error('Anthropic curation returned no parseable JSON — no fallback.');
   return parsed;
 }
@@ -528,7 +528,7 @@ export async function reviewEditionWithFutureEditor(input) {
 
   const reviewConfig = {
     ...config,
-    model: 'claude-sonnet-4-6',
+    model: 'claude-3-7-sonnet-20250219',
     maxTokens: Math.min(Number(config.maxTokens) || 24000, 32000),
     timeoutMs: Math.min(Number(config.timeoutMs) || 180000, 240000),
     systemPrompt: String(config.editorSystemPrompt || DEFAULT_FUTURE_EDITOR_SYSTEM_PROMPT)
@@ -562,7 +562,7 @@ export async function reviewEditionWithFutureEditor(input) {
     day: String(input?.day || '').trim(),
     yearsForward: Number(input?.yearsForward) || 5,
     editionDate: String(input?.editionDate || '').trim(),
-    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-sonnet-4-6',
+    model: String(parsed?.model || reviewConfig.model || '').trim() || 'claude-3-7-sonnet-20250219',
     stories: out
   };
 }
@@ -612,7 +612,7 @@ export async function generateMissingArticleBodies(stories, configOverride) {
       ...config,
       maxTokens: Math.min(config.maxTokens, 24000),
       timeoutMs: isVercel ? 120000 : 240000,
-      model: 'claude-sonnet-4-6'
+      model: 'claude-3-7-sonnet-20250219'
     };
 
     try {

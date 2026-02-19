@@ -39,19 +39,19 @@ export function getAnthropicApiKey() {
 }
 
 export function getIdeasModelCandidates() {
-  const primary = String(process.env.IDEAS_MODEL || 'claude-sonnet-4-6').trim();
+  const primary = String(process.env.IDEAS_MODEL || 'claude-3-7-sonnet-20250219').trim();
   return [
     primary,
-    'claude-sonnet-4-6',
+    'claude-3-7-sonnet-20250219',
     'claude-haiku-4-5-20251001'
   ].filter(Boolean);
 }
 
 export function getPromptModelCandidates() {
-  const primary = String(process.env.IMAGE_PROMPT_MODEL || 'claude-sonnet-4-6').trim();
+  const primary = String(process.env.IMAGE_PROMPT_MODEL || 'claude-3-7-sonnet-20250219').trim();
   return [
     primary,
-    'claude-sonnet-4-6',
+    'claude-3-7-sonnet-20250219',
     'claude-haiku-4-5-20251001'
   ].filter(Boolean);
 }

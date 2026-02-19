@@ -1,5 +1,4 @@
 const fs = require('fs');
-const glob = require('glob'); // Not available? We can just use basic recursion.
 
 const walk = (dir) => {
   let results = [];
@@ -23,13 +22,14 @@ const walk = (dir) => {
 const files = walk('.');
 
 files.forEach(file => {
+  if (file.includes('replace_sonnet')) return;
   let content = fs.readFileSync(file, 'utf8');
   let newContent = content
-    .replace(/Opus 4\.6/g, 'Sonnet 3.7')
-    .replace(/opus 4\.6/g, 'sonnet 3.7')
-    .replace(/Opus/g, 'Sonnet')
-    .replace(/opus/g, 'sonnet')
-    .replace(/OPUS/g, 'SONNET');
+    .replace(/claude-sonnet-4-6/g, 'claude-3-7-sonnet-20250219')
+    .replace(/Sonnet 4\.6/g, 'Sonnet 3.7')
+    .replace(/sonnet 4\.6/g, 'sonnet 3.7')
+    .replace(/sonnet-4\.6/g, 'sonnet-3.7')
+    .replace(/sonnet-4-6/g, 'sonnet-3-7');
     
   if (content !== newContent) {
     fs.writeFileSync(file, newContent);
