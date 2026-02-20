@@ -491,7 +491,7 @@ export async function generateDailyCuration({ day, sectionOrder, topicsBySection
 
   const providerMode = resolveProvider(mode);
   const timeoutMs = Math.max(20000, Math.min(180000, Number(process.env.SONNET_TIMEOUT_MS || 90000)));
-  const model = envKey('SONNET_MODEL') || envKey('SONNET_MODEL_NAME') || 'sonnet-3.7';
+  const model = envKey('SONNET_MODEL') || envKey('SONNET_MODEL_NAME') || 'sonnet-4.6';
 
   const callJson = async ({ system, user }) => {
     if (providerMode === 'openai') return callOpenAIJson({ model, system, user, timeoutMs });

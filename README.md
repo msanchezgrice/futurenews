@@ -45,13 +45,13 @@ If 45678 is occupied, the server automatically increments by 17 and tries the ne
 
 ## Daily curation (Sonnet → Spark guidance)
 The pipeline can run a daily "curation" step that:
-- Uses a higher-quality model (configured as "Sonnet 3.7") to rewrite headlines/deks and produce short per-story directions.
+- Uses a higher-quality model (configured as "Sonnet 4.6") to rewrite headlines/deks and produce short per-story directions.
 - Prewrites only a small number of key stories per edition (stored in the normal render cache so they load instantly).
 - Leaves secondary stories as lightweight directives so the fast model (Codex Spark) writes them on click.
 
 Configure via environment variables:
 - `SONNET_MODE=mock` (default) or `SONNET_MODE=anthropic` or `SONNET_MODE=openai`
-- `SONNET_MODEL=sonnet-3.7`
+- `SONNET_MODEL=sonnet-4.6`
 - `SONNET_API_KEY=...` (required for `anthropic` / `openai`)
 - `SONNET_API_URL=...` (optional override; defaults to the provider's standard endpoint)
 - `SONNET_SYSTEM_PROMPT=...` (optional; overrides the provider system prompt)

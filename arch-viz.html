@@ -197,7 +197,7 @@
       <h3><span class="badge badge-purple">LLM</span> Three Touchpoints</h3>
       <ul>
         <li><strong>Curation</strong> — Sonnet with extended thinking (10K budget). Writes all stories: headlines, deks, draftArticle, confidence scores</li>
-        <li><strong>Rendering</strong> — Sonnet 3.7 generates article body on-click via HTTP API (no WebSocket)</li>
+        <li><strong>Rendering</strong> — Sonnet 4.6 generates article body on-click via HTTP API (no WebSocket)</li>
         <li><strong>Images</strong> — DALL-E 3 generates hero images per story (1792×1024)</li>
       </ul>
       <p style="margin-top:8px">No mock fallback — curation requires <code>anthropic</code> or <code>openai</code> mode</p>
@@ -689,7 +689,7 @@
     <div class="env-card">
       <h4>Sonnet Curation</h4>
       <div class="env-row"><span class="env-key">SONNET_MODE</span><span class="env-val">anthropic | openai (no mock fallback)</span></div>
-      <div class="env-row"><span class="env-key">SONNET_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
+      <div class="env-row"><span class="env-key">SONNET_MODEL</span><span class="env-val">claude-sonnet-4-6</span></div>
       <div class="env-row"><span class="env-key">SONNET_API_KEY</span><span class="env-val">(Anthropic/OpenAI key)</span></div>
       <div class="env-row"><span class="env-key">SONNET_API_URL</span><span class="env-val">(custom endpoint)</span></div>
       <div class="env-row"><span class="env-key">SONNET_SYSTEM_PROMPT</span><span class="env-val">(override system prompt)</span></div>
@@ -701,7 +701,7 @@
     <div class="env-card">
       <h4>Article Rendering</h4>
       <div class="env-row"><span class="env-key">ANTHROPIC_API_KEY</span><span class="env-val">(required for article rendering)</span></div>
-      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-3-7-sonnet-20250219</span></div>
+      <div class="env-row"><span class="env-key">ARTICLE_MODEL</span><span class="env-val">claude-sonnet-4-6</span></div>
     </div>
     <div class="env-card">
       <h4>Image Generation + Worker</h4>
@@ -724,7 +724,7 @@
       <p style="margin-bottom:12px">1 batch call per edition. ALL ~20 stories curated with full draftArticle + confidence.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code></td></tr>
-        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (configurable)</td></tr>
+        <tr><td>Model</td><td>claude-sonnet-4-6 (configurable)</td></tr>
         <tr><td>Thinking</td><td>Enabled, 10K budget (Sonnet)</td></tr>
         <tr><td>Temperature</td><td>N/A (thinking) or 0.4 (Haiku)</td></tr>
         <tr><td>Max tokens</td><td>32,000 (4K-64K)</td></tr>
@@ -743,7 +743,7 @@
       <p style="margin-bottom:12px">On-click via HTTP API. Skipped if draftArticle body already >200 chars.</p>
       <table style="font-size:12px;">
         <tr><td>API</td><td><code>POST /v1/messages</code> (streaming)</td></tr>
-        <tr><td>Model</td><td>claude-3-7-sonnet-20250219 (<code>ARTICLE_MODEL</code>)</td></tr>
+        <tr><td>Model</td><td>claude-sonnet-4-6 (<code>ARTICLE_MODEL</code>)</td></tr>
         <tr><td>Timeout</td><td>120s</td></tr>
         <tr><td>Auth</td><td><code>ANTHROPIC_API_KEY</code></td></tr>
         <tr><td>Fallback</td><td>None (errors propagated)</td></tr>
@@ -777,9 +777,9 @@
 <div class="divider"></div>
 <div class="section" id="costs">
   <h2><span class="num">09</span> LLM Cost Estimates</h2>
-  <p class="subtitle">Sonnet 3.7: $15/M input, $75/M output. Haiku 4.5: $1/M, $5/M. DALL-E 3: $0.08/image. Extended thinking tokens charged at output rate.</p>
+  <p class="subtitle">Sonnet 4.6: $15/M input, $75/M output. Haiku 4.5: $1/M, $5/M. DALL-E 3: $0.08/image. Extended thinking tokens charged at output rate.</p>
 
-  <h3>Per Curation Call (Sonnet 3.7 with Extended Thinking)</h3>
+  <h3>Per Curation Call (Sonnet 4.6 with Extended Thinking)</h3>
   <table style="max-width:700px;">
     <thead><tr><th>Component</th><th>Tokens</th><th>Cost</th></tr></thead>
     <tbody>
@@ -790,7 +790,7 @@
     </tbody>
   </table>
 
-  <h3>Per Render Call (Sonnet 3.7)</h3>
+  <h3>Per Render Call (Sonnet 4.6)</h3>
   <table style="max-width:700px;">
     <thead><tr><th>Component</th><th>Tokens</th><th>Cost</th></tr></thead>
     <tbody>
